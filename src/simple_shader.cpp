@@ -1,39 +1,27 @@
-﻿#include <ai.h>
+﻿#include "ai.h"
 
-AI_SHADER_NODE_EXPORT_METHODS(SimpleMethods);
+AI_SHADER_NODE_EXPORT_METHODS(Simple);
 
 enum SimpleParams { p_color };
 
-node_parameters
-{
+//node_parameters
+static void Parameters(AtList* params, AtNodeEntry *nentry) {
     AiParameterRGB("color", 0.7f, 0.7f, 0.7f);
 }
 
-node_initialize
-{
+//node_initialize
+static void Initialize(AtRenderSession* render_session, AtNode* node) {
 }
 
-node_update
-{
+//node_update
+static void Update(AtRenderSession* render_session, AtNode* node) {
 }
 
-node_finish
-{
+//node_finish
+static void Finish(AtNode* node) {
 }
 
-shader_evaluate
-{
+//shader_evaluate
+static void Evaluate(AtNode* node, AtShaderGlobals* sg) {
     sg->out.RGB() = AiShaderEvalParamRGB(p_color);
-}
-
-node_loader
-{
-    if (i > 0)
-        return false;
-    node->methods = SimpleMethods;
-    node->output_type = AI_TYPE_RGB;
-    node->name = "simple";
-    node->node_type = AI_NODE_SHADER;
-    strcpy(node->version, AI_VERSION);
-    return true;
 }
