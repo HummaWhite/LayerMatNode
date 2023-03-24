@@ -9,21 +9,20 @@
 DECL_METHOD(Simple, 0)
 
 //node_loader
-AI_EXPORT_LIB bool NodeLoader(int i, AtNodeLib* node) {
+node_loader {
+	switch (i) {
 
-    switch (i) {
+	case NodeNumber::Simple:
+		node->methods = Simple;
+		node->output_type = AI_TYPE_RGB;
+		node->name = "simple";
+		node->node_type = AI_NODE_SHADER;
+		break;
 
-    case NodeNumber::Simple:
-        node->methods = Simple;
-        node->output_type = AI_TYPE_RGB;
-        node->name = "simple";
-        node->node_type = AI_NODE_SHADER;
-        break;
+	default:
+		return false;
+	}
 
-    default:
-        return false;
-    }
-    
-    strcpy(node->version, AI_VERSION);
-    return true;
+	strcpy(node->version, AI_VERSION);
+	return true;
 }
