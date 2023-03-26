@@ -1,5 +1,4 @@
 #include <cstring>
-
 #include <ai.h>
 
 #define DECL_METHOD(tag, number) \
@@ -14,7 +13,7 @@ node_loader {
 
 	case NodeNumber::Simple:
 		node->methods = Simple;
-		node->output_type = AI_TYPE_RGB;
+		node->output_type = AI_TYPE_CLOSURE;
 		node->name = "simple";
 		node->node_type = AI_NODE_SHADER;
 		break;
