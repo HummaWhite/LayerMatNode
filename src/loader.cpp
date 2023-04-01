@@ -1,6 +1,8 @@
 #include <cstring>
 #include <ai.h>
 
+#include "common.h"
+
 #define DECL_METHOD(tag, number) \
     extern const AtNodeMethods* tag; \
     namespace NodeMethod { const int tag = number; }
@@ -16,14 +18,14 @@ node_loader
 	case NodeMethod::LayeredNodeMtd:
 		node->methods = LayeredNodeMtd;
 		node->output_type = AI_TYPE_CLOSURE;
-		node->name = "LayerMatNode";
+		node->name = LayeredNodeName;
 		node->node_type = AI_NODE_SHADER;
 		break;
 
 	case NodeMethod::DielectricNodeMtd:
 		node->methods = DielectricNodeMtd;
 		node->output_type = AI_TYPE_CLOSURE;
-		node->name = "DielectricNode";
+		node->name = DielectricNodeName;
 		node->node_type = AI_NODE_SHADER;
 		break;
 

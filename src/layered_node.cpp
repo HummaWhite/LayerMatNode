@@ -1,13 +1,14 @@
-﻿#include "ai.h"
-#include "layered_bsdf.h"
-#include <ai_shader_bsdf.h>
+﻿#include <ai_shader_bsdf.h>
 #include <vector>
+
+#include "common.h"
+#include "bsdf.h"
 
 AI_SHADER_NODE_EXPORT_METHODS(LayeredNodeMtd);
 
 enum LayeredNodeParams
 {
-	p_top_bsdf,
+	p_top_bsdf = 2,
 	p_bottom_bsdf,
 	p_thickness,
 	p_g,
@@ -16,6 +17,9 @@ enum LayeredNodeParams
 
 node_parameters
 {
+	AiParameterStr(NodeParamTypeName, LayeredNodeName);
+	AiParameterPtr(NodeParamBSDFPtr, nullptr);
+
 	AiParameterNode("top_bsdf", nullptr);
 	AiParameterNode("bottom_bsdf", nullptr);
 	AiParameterFlt("thickness", 1.f);
@@ -45,10 +49,10 @@ shader_evaluate
 	AtRGB albedo = AiShaderEvalParamRGB(p_albedo);
 
 	AtRGB color;
-	if (top && bottom)
-		color = { .9f, .5f, .9f };
-	else if (top)
-		color = AI_RGB_RED;
+	if (top)
+	{
+		color = AiNodeGetRGB(top, "albedo");
+	}
 	else if (bottom)
 		color = AI_RGB_BLUE;
 	else

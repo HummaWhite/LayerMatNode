@@ -1,4 +1,4 @@
-#include "dielectric_bsdf.h"
+#include "bsdf.h"
 
 float FresnelDielectric(float cosThetaI, float eta)
 {

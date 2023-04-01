@@ -1,0 +1,44 @@
+[node la_LayerMatNode]
+    maya.name               STRING  "la_LayeredBSDF"
+    maya.id                 INT      0x00070000
+    maya.classification     STRING  "shader/surface"
+    maya.output_name        STRING  "outColor"
+    maya.output_shortname   STRING  "out"
+
+	[attr top_bsdf]
+		desc				STRING	"Top BSDF interface"
+		maya.name			STRING	"top_bsdf"
+		maya.shortname		STRING	"tBSDF"
+
+	[attr bottom_bsdf]
+		desc				STRING	"Bottom BSDF interface"
+		maya.name			STRING	"bottom_bsdf"
+		maya.shortname		STRING	"bBSDF"
+
+	[attr thickness]
+		desc				STRING	"Thickness of layer"
+		maya.name			STRING	"thickness"
+		maya.shortname		STRING	"thick"
+
+	[attr g]
+		desc				STRING	"???"
+		maya.name			STRING	"g"
+
+	[attr albedo]
+		desc				STRING	"Albedo of medium"
+		maya.name			STRING	"albedo"
+
+[node la_DielectricNode]
+	maya.name				STRING	"la_DielectricBSDF"
+	maya.id					INT		0x00070001
+	maya.classification		STRING	"shader/surface"
+	maya.output_name		STRING	"outColor"
+	maya.output_shortname	STRING	"out"
+
+	[attr ior]
+		desc				STRING	"Index of refraction"
+		maya.name			STRING	"ior"
+
+	[attr roughness]
+		desc				STRING	"Roughness"
+		maya.name			STRING	"roughness"
