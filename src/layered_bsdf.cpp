@@ -1,6 +1,7 @@
-﻿#include "layerbsdf.h"
+﻿#include "layered_bsdf.h"
 
-struct DiffuseBSDF {
+struct DiffuseBSDF
+{
     /* parameters */
     AtVector N;
     /* set in bsdf_init */
@@ -9,7 +10,8 @@ struct DiffuseBSDF {
 
 AI_BSDF_EXPORT_METHODS(DiffuseBSDFMtd);
 
-bsdf_init {
+bsdf_init
+{
     DiffuseBSDF *data = (DiffuseBSDF *)AiBSDFGetData(bsdf);
 
     // store forward facing smooth normal for bump shadowing
@@ -28,7 +30,8 @@ bsdf_init {
     AiBSDFInitNormal(bsdf, data->N, true);
 }
 
-bsdf_sample {
+bsdf_sample
+{
     DiffuseBSDF *data = (DiffuseBSDF *)AiBSDFGetData(bsdf);
 
     // sample cosine weighted incoming light direction
@@ -66,7 +69,8 @@ bsdf_sample {
     return lobe_mask;
 }
 
-bsdf_eval {
+bsdf_eval
+{
     DiffuseBSDF *data = (DiffuseBSDF *)AiBSDFGetData(bsdf);
 
     // discard rays below the hemisphere
@@ -83,7 +87,8 @@ bsdf_eval {
 }
 
 AtBSDF *LayeredBSDFCreate(const AtShaderGlobals *sg, const AtRGB &weight,
-                                                    const AtVector &N, std::vector<AtBSDF *> bsdfs) {
+    const AtVector &N, std::vector<AtBSDF *> bsdfs)
+{
     AtBSDF *bsdf = AiBSDF(sg, weight, DiffuseBSDFMtd, sizeof(DiffuseBSDF));
     DiffuseBSDF *data = (DiffuseBSDF *)AiBSDFGetData(bsdf);
     data->N = N;

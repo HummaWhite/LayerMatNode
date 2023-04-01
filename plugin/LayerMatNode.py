@@ -17,8 +17,8 @@ class AEmySimpleTemplate(ShaderAETemplate):
         # Begins a "Color Section"
         self.beginLayout("Color Section", collapse=False)
         # Add a control for the "constatColor" shader attribute
-        self.addControl("color", label="Color",
-        annotation="Constant Color")
+        #self.addControl("num_bsdf", label="NumBSDF")
+        #self.addControl("color", label="Color")
 
         self.endLayout()
 

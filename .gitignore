@@ -2,3 +2,5 @@ out/*
 build/*
 .vs/*
 *.pyc
+*.swp
+plugin/Debug
