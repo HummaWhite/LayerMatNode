@@ -60,7 +60,7 @@ shader_evaluate
 
 	if (sg->Rt & AI_RAY_SHADOW)
 		return;
-	sg->out.CLOSURE() = LayeredBSDFCreate(sg, color, sg->Nf, {});
+	sg->out.CLOSURE() = LambertBSDFCreate(sg, color);
 }
 
 /*

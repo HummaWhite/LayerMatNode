@@ -5,9 +5,16 @@
     maya.output_name        STRING  "outColor"
     maya.output_shortname   STRING  "out"
 
+[node LambertNode]
+	maya.name				STRING	"la_LambertBSDF"
+	maya.id					INT		0x00070001
+	maya.classification		STRING	"shader/surface"
+	maya.output_name		STRING	"outColor"
+	maya.output_shortname	STRING	"out"
+
 [node DielectricNode]
 	maya.name				STRING	"la_DielectricBSDF"
-	maya.id					INT		0x00070001
+	maya.id					INT		0x00070002
 	maya.classification		STRING	"shader/surface"
 	maya.output_name		STRING	"outColor"
 	maya.output_shortname	STRING	"out"

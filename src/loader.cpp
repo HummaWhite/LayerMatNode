@@ -8,7 +8,8 @@
     namespace NodeMethod { const int tag = number; }
 
 DECL_METHOD(LayeredNodeMtd, 0);
-DECL_METHOD(DielectricNodeMtd, 1);
+DECL_METHOD(LambertNodeMtd, 1);
+DECL_METHOD(DielectricNodeMtd, 2);
 
 //node_loader
 node_loader
@@ -19,6 +20,13 @@ node_loader
 		node->methods = LayeredNodeMtd;
 		node->output_type = AI_TYPE_CLOSURE;
 		node->name = LayeredNodeName;
+		node->node_type = AI_NODE_SHADER;
+		break;
+
+	case NodeMethod::LambertNodeMtd:
+		node->methods = LambertNodeMtd;
+		node->output_type = AI_TYPE_CLOSURE;
+		node->name = LambertNodeName;
 		node->node_type = AI_NODE_SHADER;
 		break;
 
