@@ -1,4 +1,5 @@
 ﻿#include "bsdf.h"
+#include "ai_shader_bsdf.h"
 
 AI_BSDF_EXPORT_METHODS(LambertBSDFMtd);
 
@@ -19,8 +20,22 @@ bsdf_init
 
 bsdf_sample
 {
+    return AI_BSDF_LOBE_MASK_NONE;
     auto& ref = AiBSDFGetDataRef<LambertBSDF>(bsdf);
+    
+    auto sample = ref.Sample(false, ref.mayaRng);
 
+    if (!sample)
+        return AI_BSDF_LOBE_MASK_NONE;
+
+    if (sample->w.z < 0)
+        return AI_BSDF_LOBE_MASK_NONE;
+
+    out_wi = AtVectorDv(ToWorld(ref.nf, sample->w));
+
+    out_lobes[0] = AtBSDFLobeSample(ref.albedo, 0.0f, sample->pdf);
+    return lobe_mask;
+    
     // sample cosine weighted incoming light direction
     AtVector U, V;
     AiV3BuildLocalFrame(U, V, ref.nf);
@@ -58,7 +73,15 @@ bsdf_sample
 bsdf_eval
 {
     auto& ref = AiBSDFGetDataRef<LambertBSDF>(bsdf);
+    /*
+    AtVector wiLocal = ToLocal(ref.nf, wi);
 
+    if (wiLocal.z < 0)
+        return AI_BSDF_LOBE_MASK_NONE;
+
+    out_lobes[0] = AtBSDFLobeSample(ref.albedo, 0.f, ref.PDF(wiLocal, false, ref.mayaRng));
+    return lobe_mask;
+    */
     // discard rays below the hemisphere
     const float cosNI = AiV3Dot(ref.nf, wi);
     if (cosNI <= 0.f)
@@ -72,11 +95,13 @@ bsdf_eval
     return lobe_mask;
 }
 
-AtBSDF* LambertBSDFCreate(const AtShaderGlobals* sg, const AtRGB& albedo)
+AtBSDF* AiLambertBSDF(const AtShaderGlobals* sg, const LambertBSDF* lambertBSDF, RandomEngine* mayaRng)
 {
     AtBSDF* bsdf = AiBSDF(sg, AI_RGB_WHITE, LambertBSDFMtd, sizeof(LambertBSDF));
     LambertBSDF& ref = AiBSDFGetDataRef<LambertBSDF>(bsdf);
-    ref.albedo = albedo;
-    ref.SetNormals(sg);
+
+    ref = *lambertBSDF;
+    ref.SetDirections(sg);
+    ref.mayaRng = mayaRng;
     return bsdf;
 }

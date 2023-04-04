@@ -49,26 +49,34 @@ inline AtString GetNodeTypeName(const AtNode* node, AtShaderGlobals* sg)
 	return AiShaderEvalParamStr(0);
 }
 
-inline AtBSDF* GetNodeBSDF(const AtNode* node)
+template<typename BSDFT>
+BSDFT* GetNodeBSDF(const AtNode* node)
 {
-	return reinterpret_cast<AtBSDF*>(AiNodeGetPtr(node, NodeParamBSDFPtr));
+	return reinterpret_cast<BSDFT*>(AiNodeGetPtr(node, NodeParamBSDFPtr));
 }
 
-inline AtBSDF* GetNodeBSDF(const AtNode* node, AtShaderGlobals* sg)
+template<typename BSDFT>
+BSDFT* GetNodeBSDF(const AtNode* node, AtShaderGlobals* sg)
 {
-	return reinterpret_cast<AtBSDF*>(AiShaderEvalParamPtr(1));
+	return reinterpret_cast<BSDFT*>(AiShaderEvalParamPtr(1));
 }
 
-template<typename BSDFType>
-BSDFType& AiBSDFGetDataRef(AtBSDF* bsdf)
+template<typename T>
+T* GetNodeLocalData(const AtNode* node)
 {
-	return *reinterpret_cast<BSDFType*>(AiBSDFGetData(bsdf));
+	return reinterpret_cast<T*>(AiNodeGetLocalData(node));
 }
 
-template<typename BSDFType>
-const BSDFType& AiBSDFGetDataRef(const AtBSDF* bsdf)
+template<typename BSDFT>
+BSDFT& AiBSDFGetDataRef(AtBSDF* bsdf)
 {
-	return *reinterpret_cast<BSDFType*>(AiBSDFGetData(bsdf));
+	return *reinterpret_cast<BSDFT*>(AiBSDFGetData(bsdf));
+}
+
+template<typename BSDFT>
+BSDFT& AiBSDFGetDataRef(const AtBSDF* bsdf)
+{
+	return *reinterpret_cast<BSDFT*>(AiBSDFGetData(bsdf));
 }
 
 inline float GetSample(AtSamplerIterator* itr)
@@ -107,4 +115,26 @@ inline AtVector2 ToConcentricDisk(const AtVector2& uv)
 		phi = AI_PI * 0.5f - AI_PI * v.x / v.y * 0.25f;
 	}
 	return AtVector2(r * std::cos(phi), r * std::sin(phi));
+}
+
+inline AtVector ToLocal(const AtVector& n, const AtVector& w)
+{
+	AtVector t, b;
+	AiV3BuildLocalFrame(t, b, n);
+	AtMatrix m;
+
+	m[0][0] = t[0], m[0][1] = t[1], m[0][2] = t[2], m[0][3] = 0.0f;
+	m[1][0] = b[0], m[1][1] = b[1], m[1][2] = b[2], m[1][3] = 0.0f;
+	m[2][0] = n[0], m[2][1] = n[1], m[2][2] = n[2], m[2][3] = 0.0f;
+	m[3][0] = 0.0f, m[3][1] = 0.0f, m[3][2] = 0.0f, m[3][3] = 1.0f;
+
+	m = AiM4Invert(m);
+	return AiM4VectorByMatrixMult(m, w);
+}
+
+inline AtVector ToWorld(const AtVector& n, const AtVector& w)
+{
+	AtVector t, b;
+	AiV3BuildLocalFrame(t, b, n);
+	return t * w.x + b * w.y + n * w.z;
 }

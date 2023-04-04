@@ -21,7 +21,11 @@ node_parameters
 
 node_initialize
 {
-	AiNodeSetLocalData(node, nullptr);
+	RandomEngine* rng = new RandomEngine(1234567);
+	AiNodeSetLocalData(node, rng);
+
+	LambertBSDF* bsdf = new LambertBSDF();
+	AiNodeSetPtr(node, NodeParamBSDFPtr, bsdf);
 }
 
 node_update
@@ -30,12 +34,17 @@ node_update
 
 node_finish
 {
+	auto bsdf = GetNodeBSDF<LambertBSDF>(node);
+	//delete bsdf;
 }
 
 shader_evaluate
 {
 	AtRGB albedo = AiShaderEvalParamRGB(p_albedo);
+	auto bsdf = GetNodeBSDF<LambertBSDF>(node);
+	bsdf->albedo = albedo;
+
 	if (sg->Rt & AI_RAY_SHADOW)
 		return;
-	sg->out.CLOSURE() = LambertBSDFCreate(sg, albedo);
+	sg->out.CLOSURE() = AiLambertBSDF(sg, bsdf, GetNodeLocalData<RandomEngine>(node));
 }

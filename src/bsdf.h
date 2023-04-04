@@ -7,11 +7,12 @@
 #include <ai_shaderglobals.h>
 
 #include "common.h"
+#include "random.h"
 
 enum class BSDFType
 {
     Fake,
-    Diffuse,
+    Lambert,
     Dielectric,
     Layered,
 };
@@ -28,26 +29,24 @@ struct BSDFSample
     float eta;
 };
 
-class Normal
-{
-public:
-
-};
-
 struct BSDF
 {
-    virtual AtRGB F(const AtVector& wo, const AtVector& wi, bool adjoint, AtSamplerIterator* itr) = 0;
-    virtual float PDF(const AtVector& wo, const AtVector& wi, bool adjoint, AtSamplerIterator* itr) = 0;
-    virtual std::optional<BSDFSample> Sample(const AtVector& wo, bool adjoint, AtSamplerIterator* itr) = 0;
+    // wi in local
+    virtual AtRGB F(const AtVector& wi, bool adjoint, RandomEngine* rng) = 0;
+    // wi in local
+    virtual float PDF(const AtVector& wi, bool adjoint, RandomEngine* rng) = 0;
+    // wi and sampled direction in local
+    virtual std::optional<BSDFSample> Sample(bool adjoint, RandomEngine* rng) = 0;
     virtual BSDFType Type() const = 0;
     virtual bool IsDelta() const = 0;
     virtual bool HasTransmit() const = 0;
 
-    void SetNormals(const AtShaderGlobals* sg)
+    void SetDirections(const AtShaderGlobals* sg)
     {
         nf = sg->Nf;
         ns = sg->Ns * AiV3Dot(sg->Ngf, sg->Ng);
         ng = sg->Ngf;
+        wo = ToLocal(nf, -sg->Rd);
     }
 
     static bool IsDeltaRay(int type)
@@ -66,15 +65,19 @@ struct BSDF
     AtVector ns;
     // geometry normal, not smoothed
     AtVector ng;
+    // outgoing direction of light transport in local coordinate
+    AtVector wo;
+
+    RandomEngine* mayaRng = nullptr;
 };
 
 struct FakeBSDF : public BSDF
 {
-    AtRGB F(const AtVector& wo, const AtVector& wi, bool adjoint, AtSamplerIterator* itr) override { return AtRGB(0.f); }
+    AtRGB F(const AtVector& wi, bool adjoint, RandomEngine* rng) override { return AtRGB(0.f); }
 
-    float PDF(const AtVector& wo, const AtVector& wi, bool adjoint, AtSamplerIterator* itr) override { return 0.f; }
+    float PDF(const AtVector& wi, bool adjoint, RandomEngine* rng) override { return 0.f; }
 
-    std::optional<BSDFSample> Sample(const AtVector& wo, bool adjoint, AtSamplerIterator* itr) override { return BSDFSample(-wo, AtRGB(1.f), 1.f, AI_RAY_SPECULAR_TRANSMIT); }
+    std::optional<BSDFSample> Sample(bool adjoint, RandomEngine* rng) override { return BSDFSample(-wo, AtRGB(1.f), 1.f, AI_RAY_SPECULAR_TRANSMIT); }
 
     BSDFType Type() const override { return BSDFType::Fake; }
 
@@ -85,19 +88,24 @@ struct FakeBSDF : public BSDF
 
 struct LambertBSDF : public BSDF
 {
-    AtRGB F(const AtVector& wo, const AtVector& wi, bool adjoint, AtSamplerIterator* itr) override
+    LambertBSDF() = default;
+
+    LambertBSDF(const AtRGB& albedo) : albedo(albedo) {}
+
+    AtRGB F(const AtVector& wi, bool adjoint, RandomEngine* rng) override
     {
         return albedo * AI_ONEOVERPI;
     }
 
-    float PDF(const AtVector& wo, const AtVector& wi, bool adjoint, AtSamplerIterator* itr) override
+    float PDF(const AtVector& wi, bool adjoint, RandomEngine* rng) override
     {
         return std::abs(wi.z) * AI_ONEOVERPI;
     }
 
-    std::optional<BSDFSample> Sample(const AtVector& wo, bool adjoint, AtSamplerIterator* itr) override
+    std::optional<BSDFSample> Sample(bool adjoint, RandomEngine* rng) override
     {
-        AtVector2 r = ToConcentricDisk(GetSample2(itr));
+        //return std::nullopt;
+        AtVector2 r = ToConcentricDisk(Sample2D(rng));
         float z = std::sqrt(1.f - AiV2Dot(r, r));
         AtVector w(r.x, r.y, z);
         return BSDFSample(w, albedo * AI_ONEOVERPI, z, AI_RAY_DIFFUSE_REFLECT);
@@ -107,7 +115,9 @@ struct LambertBSDF : public BSDF
 
     bool HasTransmit() const override { return true; }
 
-    AtRGB albedo;
+    BSDFType Type() const override { return BSDFType::Lambert; }
+
+    AtRGB albedo = AtRGB(.8f);
 };
 
 struct DielectricBSDF : public BSDF
@@ -125,10 +135,8 @@ struct LayeredBSDF : public BSDF
     AtRGB albedo;
 };
 
-using VarBSDF = std::variant<DielectricBSDF, LayeredBSDF>;
-
 float FresnelDielectric(float cosThetaI, float eta);
 
-AtBSDF* LambertBSDFCreate(const AtShaderGlobals* sg, const AtRGB& albedo);
-AtBSDF* DielectricBSDFCreate(const AtShaderGlobals* sg, float ior, float roughness);
+AtBSDF* AiLambertBSDF(const AtShaderGlobals* sg, const LambertBSDF* bsdf, RandomEngine* mayaRng);
+AtBSDF* AiDielectricBSDF(const AtShaderGlobals* sg, const DielectricBSDF* bsdf, RandomEngine* mayaRng);
 //AtBSDF* LayeredBSDFCreate(const AtShaderGlobals* sg, const AtRGB& weight, const AtVector& N, std::vector<AtBSDF*>bsdfs);

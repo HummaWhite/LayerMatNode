@@ -8,8 +8,8 @@ AI_SHADER_NODE_EXPORT_METHODS(LayeredNodeMtd);
 
 enum LayeredNodeParams
 {
-	p_top_bsdf = 2,
-	p_bottom_bsdf,
+	p_top_node = 2,
+	p_bottom_node,
 	p_thickness,
 	p_g,
 	p_albedo,
@@ -42,8 +42,8 @@ node_finish
 
 shader_evaluate
 {
-	auto top = reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_top_bsdf));
-	auto bottom = reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_bottom_bsdf));
+	auto top = reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_top_node));
+	auto bottom = reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_bottom_node));
 	float thickness = AiShaderEvalParamFlt(p_thickness);
 	float g = AiShaderEvalParamFlt(p_g);
 	AtRGB albedo = AiShaderEvalParamRGB(p_albedo);
@@ -60,7 +60,8 @@ shader_evaluate
 
 	if (sg->Rt & AI_RAY_SHADOW)
 		return;
-	sg->out.CLOSURE() = LambertBSDFCreate(sg, color);
+	//sg->out.CLOSURE() = LambertBSDFCreate(sg, color);
+	sg->out.CLOSURE() = AiOrenNayarBSDF(sg, color, sg->Nf);
 }
 
 /*
