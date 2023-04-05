@@ -144,3 +144,13 @@ inline AtVector ToWorld(const AtVector& n, const AtVector& w)
 	AiV3BuildLocalFrame(t, b, n);
 	return t * w.x + b * w.y + n * w.z;
 }
+
+inline bool IsDeltaRay(int type)
+{
+	return (type & AI_RAY_ALL_SPECULAR) != 0;
+}
+
+inline bool IsTransmitRay(int type)
+{
+	return (type & AI_RAY_ALL_TRANSMIT) != 0;
+}

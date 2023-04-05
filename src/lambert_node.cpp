@@ -2,7 +2,7 @@
 #include <vector>
 
 #include "common.h"
-#include "bsdf.h"
+#include "bsdfs.h"
 
 AI_SHADER_NODE_EXPORT_METHODS(LambertNodeMtd);
 
@@ -19,8 +19,7 @@ node_parameters
 
 node_initialize
 {
-	LambertBSDF* bsdf = new LambertBSDF();
-	//bsdf->rng.seed(1234567);
+	BSDF* bsdf = new BSDF;
 	AiNodeSetLocalData(node, bsdf);
 }
 
@@ -30,17 +29,20 @@ node_update
 
 node_finish
 {
-	//auto bsdf = GetNodeBSDF<LambertBSDF>(node);
-	//delete bsdf;
+	delete GetNodeLocalData<BSDF>(node);
 }
 
 shader_evaluate
 {
-	auto bsdf = GetNodeLocalData<LambertBSDF>(node);
-	bsdf->albedo = AiShaderEvalParamRGB(p_albedo);
+	LambertBSDF lambertBSDF;
+	lambertBSDF.albedo = AiShaderEvalParamRGB(p_albedo);
+	lambertBSDF.rng.seed(sg->si << 16 | sg->tid);
+
+	auto bsdf = GetNodeLocalData<BSDF>(node);
+	*bsdf = lambertBSDF;
 
 	if (sg->Rt & AI_RAY_SHADOW)
 		return;
 
-	sg->out.CLOSURE() = AiLambertBSDF(sg, bsdf);
+	sg->out.CLOSURE() = AiLambertBSDF(sg, lambertBSDF);
 }

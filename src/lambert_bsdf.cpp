@@ -1,41 +1,27 @@
-﻿#include "bsdf.h"
+﻿#include "bsdfs.h"
 #include "ai_shader_bsdf.h"
 
 AI_BSDF_EXPORT_METHODS(LambertBSDFMtd);
 
 bsdf_init
 {
-    auto bsdfPtr = AiBSDFGetDataPtr<LambertBSDF>(bsdf);
+    auto fs = AiBSDFGetDataPtr<LambertBSDF>(bsdf);
 
     static const AtBSDFLobeInfo lobe_info[1] = {
             {AI_RAY_DIFFUSE_REFLECT, 0, AtString()}};
 
     AiBSDFInitLobes(bsdf, lobe_info, 1);
-    AiBSDFInitNormal(bsdf, bsdfPtr->nf, true);
+    AiBSDFInitNormal(bsdf, fs->nf, true);
 }
 
 RandomEngine rng;
 
 bsdf_sample
 {
-    auto bsdfPtr = AiBSDFGetDataPtr<LambertBSDF>(bsdf);
-    
-/*
-    out_wi = AtVectorDv();
-    out_lobe_index = 0;
+    auto fs = AiBSDFGetDataPtr<LambertBSDF>(bsdf);
+    fs->rng.seed(*reinterpret_cast<const uint32_t*>(&rnd.x));
 
-    AtRGB color;
-    if (bsdfPtr)
-        color = bsdfPtr->albedo;
-    else
-        color = AI_RGB_RED;
-
-    out_lobes[0] = AtBSDFLobeSample(color, 0.0f, 1.f);
-
-    return lobe_mask;
-    */
-
-    BSDFSample sample = bsdfPtr->Sample(false);
+    BSDFSample sample = fs->Sample(false);
 
     if (!sample.IsInvalid())
         return AI_BSDF_LOBE_MASK_NONE;
@@ -43,35 +29,29 @@ bsdf_sample
     if (sample.w.z < 0)
         return AI_BSDF_LOBE_MASK_NONE;
 
-    out_wi = AtVectorDv(ToWorld(bsdfPtr->nf, sample.w));
+    out_wi = AtVectorDv(ToWorld(fs->nf, sample.w));
     out_lobe_index = 0;
-    out_lobes[0] = AtBSDFLobeSample(bsdfPtr->albedo, 0.0f, sample.pdf);
-
+    out_lobes[0] = AtBSDFLobeSample(sample.f, 0.0f, sample.pdf);
     return lobe_mask;
 }
 
 bsdf_eval
 {
-    return AI_BSDF_LOBE_MASK_NONE;
-    auto bsdfPtr = AiBSDFGetDataPtr<LambertBSDF>(bsdf);
+    auto fs = AiBSDFGetDataPtr<LambertBSDF>(bsdf);
     
-    AtVector wiLocal = ToLocal(bsdfPtr->nf, wi);
+    AtVector wiLocal = ToLocal(fs->nf, wi);
 
     if (wiLocal.z < 0)
         return AI_BSDF_LOBE_MASK_NONE;
 
-    out_lobes[0] = AtBSDFLobeSample(bsdfPtr->albedo, 0.f, bsdfPtr->PDF(wiLocal, false));
+    out_lobes[0] = AtBSDFLobeSample(fs->albedo * AI_ONEOVERPI, 0.f, fs->PDF(wiLocal, false));
     return lobe_mask;
 }
 
-AtBSDF* AiLambertBSDF(const AtShaderGlobals* sg, const LambertBSDF* lambertBSDF)
+AtBSDF* AiLambertBSDF(const AtShaderGlobals* sg, const LambertBSDF& lambertBSDF)
 {
     AtBSDF* bsdf = AiBSDF(sg, AI_RGB_WHITE, LambertBSDFMtd, sizeof(LambertBSDF));
-    LambertBSDF* bsdfPtr = AiBSDFGetDataPtr<LambertBSDF>(bsdf);
-
-    bsdfPtr->SetDirections(sg);
-    bsdfPtr->rng = bsdfPtr->rng;
-    bsdfPtr->albedo = lambertBSDF->albedo;
-   
+    auto data = AiBSDFGetDataPtr<LambertBSDF>(bsdf);
+    *data = lambertBSDF;
     return bsdf;
 }

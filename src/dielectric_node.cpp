@@ -2,7 +2,7 @@
 #include <vector>
 
 #include "common.h"
-#include "bsdf.h"
+#include "bsdfs.h"
 
 AI_SHADER_NODE_EXPORT_METHODS(DielectricNodeMtd);
 
