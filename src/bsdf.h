@@ -15,12 +15,18 @@ enum class BSDFType
     Lambert,
     Dielectric,
     Layered,
+    Invalid,
 };
 
 struct BSDFSample
 {
     BSDFSample(AtVector w, AtRGB f, float pdf, int type, float eta = 1.f) :
         w(w), f(f), pdf(pdf), type(type), eta(eta) {}
+
+    bool IsInvalid() const
+    {
+        return type == AI_RAY_UNDEFINED;
+    }
 
     AtVector w;
     AtRGB f;
@@ -29,14 +35,16 @@ struct BSDFSample
     float eta;
 };
 
+const BSDFSample InvalidSample(AtVector(), AtRGB(), 0, AI_RAY_UNDEFINED);
+
 struct BSDF
 {
     // wi in local
-    virtual AtRGB F(const AtVector& wi, bool adjoint, RandomEngine* rng) = 0;
+    virtual AtRGB F(const AtVector& wi, bool adjoint) = 0;
     // wi in local
-    virtual float PDF(const AtVector& wi, bool adjoint, RandomEngine* rng) = 0;
+    virtual float PDF(const AtVector& wi, bool adjoint) = 0;
     // wi and sampled direction in local
-    virtual std::optional<BSDFSample> Sample(bool adjoint, RandomEngine* rng) = 0;
+    virtual BSDFSample Sample(bool adjoint) = 0;
     virtual BSDFType Type() const = 0;
     virtual bool IsDelta() const = 0;
     virtual bool HasTransmit() const = 0;
@@ -68,16 +76,16 @@ struct BSDF
     // outgoing direction of light transport in local coordinate
     AtVector wo;
 
-    RandomEngine* mayaRng = nullptr;
+    RandomEngine rng;
 };
 
 struct FakeBSDF : public BSDF
 {
-    AtRGB F(const AtVector& wi, bool adjoint, RandomEngine* rng) override { return AtRGB(0.f); }
+    AtRGB F(const AtVector& wi, bool adjoint) override { return AtRGB(0.f); }
 
-    float PDF(const AtVector& wi, bool adjoint, RandomEngine* rng) override { return 0.f; }
+    float PDF(const AtVector& wi, bool adjoint) override { return 0.f; }
 
-    std::optional<BSDFSample> Sample(bool adjoint, RandomEngine* rng) override { return BSDFSample(-wo, AtRGB(1.f), 1.f, AI_RAY_SPECULAR_TRANSMIT); }
+    BSDFSample Sample(bool adjoint) override { return BSDFSample(-wo, AtRGB(1.f), 1.f, AI_RAY_SPECULAR_TRANSMIT); }
 
     BSDFType Type() const override { return BSDFType::Fake; }
 
@@ -88,23 +96,18 @@ struct FakeBSDF : public BSDF
 
 struct LambertBSDF : public BSDF
 {
-    LambertBSDF() = default;
-
-    LambertBSDF(const AtRGB& albedo) : albedo(albedo) {}
-
-    AtRGB F(const AtVector& wi, bool adjoint, RandomEngine* rng) override
+    AtRGB F(const AtVector& wi, bool adjoint) override
     {
         return albedo * AI_ONEOVERPI;
     }
 
-    float PDF(const AtVector& wi, bool adjoint, RandomEngine* rng) override
+    float PDF(const AtVector& wi, bool adjoint) override
     {
         return std::abs(wi.z) * AI_ONEOVERPI;
     }
 
-    std::optional<BSDFSample> Sample(bool adjoint, RandomEngine* rng) override
+    BSDFSample Sample(bool adjoint) override
     {
-        //return std::nullopt;
         AtVector2 r = ToConcentricDisk(Sample2D(rng));
         float z = std::sqrt(1.f - AiV2Dot(r, r));
         AtVector w(r.x, r.y, z);
@@ -137,6 +140,5 @@ struct LayeredBSDF : public BSDF
 
 float FresnelDielectric(float cosThetaI, float eta);
 
-AtBSDF* AiLambertBSDF(const AtShaderGlobals* sg, const LambertBSDF* bsdf, RandomEngine* mayaRng);
-AtBSDF* AiDielectricBSDF(const AtShaderGlobals* sg, const DielectricBSDF* bsdf, RandomEngine* mayaRng);
-//AtBSDF* LayeredBSDFCreate(const AtShaderGlobals* sg, const AtRGB& weight, const AtVector& N, std::vector<AtBSDF*>bsdfs);
+AtBSDF* AiLambertBSDF(const AtShaderGlobals* sg, const LambertBSDF* bsdf);
+AtBSDF* AiDielectricBSDF(const AtShaderGlobals* sg, const DielectricBSDF* bsdf);

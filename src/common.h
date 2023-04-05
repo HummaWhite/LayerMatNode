@@ -68,6 +68,12 @@ T* GetNodeLocalData(const AtNode* node)
 }
 
 template<typename BSDFT>
+BSDFT* AiBSDFGetDataPtr(const AtBSDF* bsdf)
+{
+	return reinterpret_cast<BSDFT*>(AiBSDFGetData(bsdf));
+}
+
+template<typename BSDFT>
 BSDFT& AiBSDFGetDataRef(AtBSDF* bsdf)
 {
 	return *reinterpret_cast<BSDFT*>(AiBSDFGetData(bsdf));
