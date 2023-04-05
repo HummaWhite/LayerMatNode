@@ -1,0 +1,11 @@
+polySphere -r 1 -sx 20 -sy 20 -ax 0 1 0 -cuv 2 -ch 1;
+shadingNode -asShader aiLambertNode;
+sets -renderable true -noSurfaceShader true -empty -name aiLambertNode1SG;
+defaultNavigation -connectToExisting -source aiLambertNode1 -destination aiLambertNode1SG;
+defaultNavigation -source aiLambertNode1 -destination |pSphere1|pSphereShape1.instObjGroups[0] -connectToExisting;
+connectAttr -f aiLambertNode1.outColor aiLambertNode1SG.surfaceShader;
+connectAttr -f aiLambertNode1.outColor initialShadingGroup.surfaceShader;
+shadingNode -asLight aiAreaLight;
+setAttr "transform1.translateZ" 3;
+setAttr "aiAreaLight1.intensity" 10;
+setAttr "aiAreaLight1.exposure" 2;
