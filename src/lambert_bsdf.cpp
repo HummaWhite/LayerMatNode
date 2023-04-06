@@ -1,5 +1,4 @@
 ﻿#include "bsdfs.h"
-#include "ai_shader_bsdf.h"
 
 AI_BSDF_EXPORT_METHODS(LambertBSDFMtd);
 
@@ -7,14 +6,11 @@ bsdf_init
 {
     auto fs = AiBSDFGetDataPtr<LambertBSDF>(bsdf);
 
-    static const AtBSDFLobeInfo lobe_info[1] = {
-            {AI_RAY_DIFFUSE_REFLECT, 0, AtString()}};
+    static const AtBSDFLobeInfo lobe_info[] = { {AI_RAY_DIFFUSE_REFLECT, 0, AtString()} };
 
     AiBSDFInitLobes(bsdf, lobe_info, 1);
     AiBSDFInitNormal(bsdf, fs->nf, true);
 }
-
-RandomEngine rng;
 
 bsdf_sample
 {

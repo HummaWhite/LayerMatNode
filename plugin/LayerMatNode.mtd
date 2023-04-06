@@ -18,3 +18,10 @@
 	maya.classification		STRING	"shader/surface"
 	maya.output_name		STRING	"outColor"
 	maya.output_shortname	STRING	"out"
+
+[node MetalNode]
+	maya.name				STRING	"la_MetalBSDF"
+	maya.id					INT		0x00070003
+	maya.classification		STRING	"shader/surface"
+	maya.output_name		STRING	"outColor"
+	maya.output_shortname	STRING	"out"

@@ -32,17 +32,22 @@ struct BSDFState
 {
     BSDFState() = default;
 
-    BSDFState(const AtShaderGlobals* sg)
+    void SetDirections(const AtShaderGlobals* sg, bool keepNormalFacing)
     {
-        SetDirections(sg);
-    }
+        if (!keepNormalFacing)
+            nf = sg->Nf;
+        else
+            nf = (Dot(sg->Ng, sg->Nf) > 0) ? sg->Nf : -sg->Nf;
 
-    void SetDirections(const AtShaderGlobals* sg)
-    {
-        nf = sg->Nf;
-        ns = sg->Ns * AiV3Dot(sg->Ngf, sg->Ng);
+        ns = sg->Ns * Dot(sg->Ngf, sg->Ng);
         ng = sg->Ngf;
         wo = ToLocal(nf, -sg->Rd);
+    }
+
+    void SetDirectionsAndRng(const AtShaderGlobals* sg, bool keepNormalFacing)
+    {
+        SetDirections(sg, keepNormalFacing);
+        rng.seed(sg->si << 16 | sg->tid);
     }
 
     // front-facing mapped smooth normal
@@ -84,10 +89,10 @@ struct DielectricBSDF : BSDFState
     BSDFSample Sample(bool adjoint);
     bool IsDelta() const { return ApproxDelta(); }
     bool HasTransmit() const { return true; }
-    bool ApproxDelta() const { return roughness < .01f; }
+    bool ApproxDelta() const { return alpha < 1e-4f; }
 
     float ior;
-    float roughness;
+    float alpha;
 };
 
 struct MetalBSDF : BSDFState
@@ -97,11 +102,12 @@ struct MetalBSDF : BSDFState
     BSDFSample Sample(bool adjoint);
     bool IsDelta() const { return ApproxDelta(); }
     bool HasTransmit() const { return true; }
-    bool ApproxDelta() const { return roughness < .01f; }
+    bool ApproxDelta() const { return alpha < 1e-4f; }
 
+    AtRGB albedo;
     float ior;
     float k;
-    float roughness;
+    float alpha;
 };
 
 struct LayeredBSDF;
@@ -122,6 +128,7 @@ struct LayeredBSDF : BSDFState
     AtRGB albedo;
 };
 
+BSDFState* GetState(BSDF& bsdf);
 AtRGB F(BSDF& bsdf, Vec3f wi, bool adjoint);
 float PDF(BSDF& bsdf, Vec3f wi, bool adjoint);
 BSDFSample Sample(BSDF& bsdf, bool adjoint);
@@ -136,7 +143,9 @@ RandomEngine& Rng(BSDF& bsdf);
 bool Refract(Vec3f& wt, Vec3f n, Vec3f wi, float eta);
 bool Refract(Vec3f& wt, Vec3f wi, float eta);
 float FresnelDielectric(float cosThetaI, float eta);
-float FresnelConductor(float cosThetaI, float eta);
+float FresnelConductor(float cosThetaI, float eta, float k);
 
 AtBSDF* AiLambertBSDF(const AtShaderGlobals* sg, const LambertBSDF& lambertBSDF);
-AtBSDF* AiDielectricBSDF(const AtShaderGlobals* sg, const DielectricBSDF* bsdf);
+AtBSDF* AiDielectricBSDF(const AtShaderGlobals* sg, const DielectricBSDF& dielectricBSDF);
+AtBSDF* AiMetalBSDF(const AtShaderGlobals* sg, const MetalBSDF& metalBSDF);
+AtBSDF* AiLayeredBSDF(const AtShaderGlobals* sg, const LayeredBSDF& layeredBDSF);

@@ -12,6 +12,7 @@ const int DielectricNodeID =		0x00070002;
 const char LayeredNodeName[] = "LayerMatNode";
 const char LambertNodeName[] = "LambertNode";
 const char DielectricNodeName[] = "DielectricNode";
+const char MetalNodeName[] = "MetalNode";
 
 const char NodeParamTypeName[] = "type_name";
 const char NodeParamBSDFPtr[] = "bsdf_ptr";
@@ -32,12 +33,6 @@ BSDFT* GetNodeBSDF(const AtNode* node)
 	return reinterpret_cast<BSDFT*>(AiNodeGetPtr(node, NodeParamBSDFPtr));
 }
 
-template<typename BSDFT>
-BSDFT* GetNodeBSDF(const AtNode* node, AtShaderGlobals* sg)
-{
-	return reinterpret_cast<BSDFT*>(AiShaderEvalParamPtr(1));
-}
-
 template<typename T>
 T* GetNodeLocalData(const AtNode* node)
 {
@@ -48,18 +43,6 @@ template<typename BSDFT>
 BSDFT* AiBSDFGetDataPtr(const AtBSDF* bsdf)
 {
 	return reinterpret_cast<BSDFT*>(AiBSDFGetData(bsdf));
-}
-
-template<typename BSDFT>
-BSDFT& AiBSDFGetDataRef(AtBSDF* bsdf)
-{
-	return *reinterpret_cast<BSDFT*>(AiBSDFGetData(bsdf));
-}
-
-template<typename BSDFT>
-BSDFT& AiBSDFGetDataRef(const AtBSDF* bsdf)
-{
-	return *reinterpret_cast<BSDFT*>(AiBSDFGetData(bsdf));
 }
 
 using Vec2f = AtVector2;
@@ -221,7 +204,7 @@ struct Vec2c
 		if (real >= 0)
 			return Vec2c(t1, t2);
 		else
-			return Vec2c(std::abs(t2), t1 * std::signbit(img));
+			return Vec2c(std::abs(t2), std::copysign(t1, img));
 	}
 
 	float LengthSqr() const
