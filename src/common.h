@@ -65,6 +65,8 @@ BSDFT& AiBSDFGetDataRef(const AtBSDF* bsdf)
 using Vec2f = AtVector2;
 using Vec3f = AtVector;
 
+const Vec3f LocalUp = Vec3f(0, 0, 1);
+
 inline Vec2f ToConcentricDisk(Vec2f uv)
 {
 	if (uv.x == 0.0f && uv.y == 0.0f)
@@ -146,6 +148,11 @@ inline float AbsDot(Vec3f a, Vec3f b)
 inline bool SameHemisphere(Vec3f a, Vec3f b)
 {
 	return a.z * b.z > 0;
+}
+
+inline bool SameHemisphere(Vec3f n, Vec3f a, Vec3f b)
+{
+	return Dot(n, a) * Dot(n, b) >= 0;
 }
 
 inline Vec3f Normalize(Vec3f v)

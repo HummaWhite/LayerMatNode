@@ -26,7 +26,7 @@ struct BSDFSample
     float eta;
 };
 
-const BSDFSample InvalidSample(Vec3f(), AtRGB(), 0, AI_RAY_UNDEFINED);
+const BSDFSample BSDFInvalidSample(Vec3f(), AtRGB(), 0, AI_RAY_UNDEFINED);
 
 struct BSDFState
 {
@@ -134,6 +134,7 @@ Vec3f& Wo(BSDF& bsdf);
 RandomEngine& Rng(BSDF& bsdf);
 
 bool Refract(Vec3f& wt, Vec3f n, Vec3f wi, float eta);
+bool Refract(Vec3f& wt, Vec3f wi, float eta);
 float FresnelDielectric(float cosThetaI, float eta);
 float FresnelConductor(float cosThetaI, float eta);
 

@@ -18,6 +18,11 @@ bool Refract(Vec3f& wt, Vec3f n, Vec3f wi, float eta)
     wt = Normalize(-wi / eta + n * (cosThetaI / eta - cosThetaT));
 }
 
+bool Refract(Vec3f& wt, Vec3f wi, float eta)
+{
+    return Refract(wt, LocalUp, wi, eta);
+}
+
 float FresnelDielectric(float cosThetaI, float eta)
 {
     cosThetaI = AiClamp(cosThetaI, -1.f, 1.f);
@@ -90,42 +95,139 @@ AtRGB DielectricBSDF::F(Vec3f wi, bool adjoint)
 {
     if (ApproxDelta())
         return AtRGB(0.f);
-    float alpha = roughness * roughness;
+    float alpha = AiSqr(roughness);
 
     Vec3f wh = Normalize(wo + wi);
-    float hCosWo = AbsDot(wh, wo);
-    float hCosWi = AbsDot(wh, wi);
+    float whCosWo = AbsDot(wh, wo);
+    float whCosWi = AbsDot(wh, wi);
 
     if (SameHemisphere(wo, wi))
     {
-        float fr = FresnelDielectric(hCosWi, ior);
-        return AtRGB((hCosWi * hCosWo < 1e-7f) ? 0.f :
-            GTR2(wh.z, alpha) * SmithG(wo.z, wi.z, alpha) / (4.f * hCosWo * hCosWi) * fr);
+        float fr = FresnelDielectric(whCosWi, ior);
+        return AtRGB((whCosWi * whCosWo < 1e-7f) ? 0.f :
+            GTR2(wh.z, alpha) * SmithG(wo.z, wi.z, alpha) / (4.f * whCosWo * whCosWi) * fr);
     }
     else
     {
         float eta = wi.z > 0 ? ior : 1.f / ior;
         float sqrtDenom = Dot(wh, wo) + eta * Dot(wh, wi);
         float denom = sqrtDenom * sqrtDenom;
-        float dHdWi = hCosWi / denom;
+        float dHdWi = whCosWi / denom;
 
         denom *= std::abs(wi.z) * std::abs(wo.z);
         float fr = FresnelDielectric(Dot(wh, wi), eta);
         float factor = adjoint ? 1.f : AiSqr(1.0f / eta);
 
         return AtRGB((denom < 1e-7f) ? 0.f :
-            std::abs(GTR2(wh.z, alpha) * SmithG(wo.z, wi.z, alpha) * hCosWo * hCosWi) / denom * (1.f - fr) * factor);
+            std::abs(GTR2(wh.z, alpha) * SmithG(wo.z, wi.z, alpha) * whCosWo * whCosWi) / denom * (1.f - fr) * factor);
     }
 }
 
 float DielectricBSDF::PDF(Vec3f wi, bool adjoint)
 {
-    return 0.0f;
+    if (ApproxDelta())
+        return 0;
+    float alpha = AiSqr(roughness);
+
+    if (SameHemisphere(wo, wi))
+    {
+        Vec3f wh = Normalize(wo + wi);
+        if (Dot(wo, wh) < 0)
+            return 0;
+
+        float fr = FresnelDielectric(AbsDot(wh, wi), ior);
+        return GTR2(wh.z, alpha) / (4.f * AbsDot(wh, wo)) * fr;
+    }
+    else
+    {
+        float eta = wo.z > 0 ? ior : 1.0f / ior;
+        Vec3f wh = Normalize(wo + wi * eta);
+        if (SameHemisphere(wh, wo, wi))
+            return 0;
+
+        float fr = FresnelDielectric(Dot(wh, wo), eta);
+        float dHdWi = AbsDot(wh, wi) / AiSqr(Dot(wh, wo) + eta * Dot(wh, wi));
+        return GTR2(wh.z, alpha) * dHdWi * (1.f - fr);
+    }
 }
 
 BSDFSample DielectricBSDF::Sample(bool adjoint)
 {
-    return InvalidSample;
+    float alpha = AiSqr(roughness);
+    if (ApproxDelta())
+    {
+        float fr = FresnelDielectric(wo.z, ior);
+
+        if (Sample1D(rng) < fr)
+        {
+            Vec3f wi(-wo.x, -wo.y, wo.z);
+            return BSDFSample(wi, AtRGB(fr), fr, AI_RAY_SPECULAR_REFLECT);
+        }
+        else
+        {
+            float eta = (wo.z > 0) ? ior : 1.0f / ior;
+            Vec3f wi;
+            bool refr = Refract(wi, wo, ior);
+            if (!refr)
+                return BSDFInvalidSample;
+
+            float factor = adjoint ? 1.f : AiSqr(1.0f / eta);
+            return BSDFSample(wi, AtRGB(factor * (1.f - fr)), 1.f - fr, AI_RAY_SPECULAR_TRANSMIT, eta);
+        }
+    }
+    else
+    {
+        Vec3f wh = GTR2Sample(wo, Sample2D(rng), alpha);
+        if (wh.z < 0)
+            wh = -wh;
+        float fr = FresnelDielectric(Dot(wh, wo), ior);
+
+        if (Sample1D(rng) < fr)
+        {
+            Vec3f wi = -AiReflect(wo, wh);
+            if (!SameHemisphere(wo, wi))
+                return BSDFInvalidSample;
+
+            float p = GTR2(wh.z, alpha) / (4.f * AbsDot(wh, wo));
+            float whCosWo = AbsDot(wh, wo);
+            float whCosWi = AbsDot(wh, wi);
+
+            float r = (whCosWo * whCosWi < 1e-7f) ? 0.f :
+                GTR2(wh.z, alpha) * SmithG(wo.z, wi.z, alpha) / (4.0f * whCosWo * whCosWi);
+
+            if (isnan(p))
+                p = 0;
+            return BSDFSample(wi, AtRGB(r * fr), p * fr, AI_RAY_DIFFUSE_REFLECT);
+        }
+        else
+        {
+            float eta = (Dot(wh, wo) > 0.0f) ? ior : 1.0f / ior;
+
+            Vec3f wi;
+            bool refr = Refract(wi, wh, wo, ior);
+            if (!refr || SameHemisphere(wo, wi) || std::abs(wi.z) < 1e-10f)
+                return BSDFInvalidSample;
+
+            float whCosWo = AbsDot(wh, wo);
+            float whCosWi = AbsDot(wh, wi);
+
+            float sqrtDenom = Dot(wh, wo) + eta * Dot(wh, wi);
+            float denom = sqrtDenom * sqrtDenom;
+            float dHdWi = whCosWi / denom;
+            float factor = adjoint ? 1.f : AiSqr(1.0f / eta);
+
+            denom *= std::abs(wi.z) * std::abs(wo.z);
+
+            float r = (denom < 1e-7f) ? 0.f :
+                std::abs(GTR2(wh.z, alpha) * SmithG(wo.z, wi.z, alpha) * whCosWo * whCosWi) / denom * factor;
+
+            float p = GTR2(wh.z, alpha) * dHdWi;
+
+            if (isnan(p))
+                p = 0.0f;
+            return BSDFSample(wi, AtRGB(r * (1.f - fr)), p * (1.f - fr), AI_RAY_DIFFUSE_TRANSMIT, eta);
+        }
+    }
 }
 
 AtRGB MetalBSDF::F(Vec3f wi, bool adjoint)
@@ -140,7 +242,7 @@ float MetalBSDF::PDF(Vec3f wi, bool adjoint)
 
 BSDFSample MetalBSDF::Sample(bool adjoint)
 {
-    return InvalidSample;
+    return BSDFInvalidSample;
 }
 
 AtRGB LayeredBSDF::F(Vec3f wi, bool adjoint)
@@ -155,7 +257,7 @@ float LayeredBSDF::PDF(Vec3f wi, bool adjoint)
 
 BSDFSample LayeredBSDF::Sample(bool adjoint)
 {
-    return InvalidSample;
+    return BSDFInvalidSample;
 }
 
 bool LayeredBSDF::IsDelta() const
@@ -235,7 +337,7 @@ BSDFSample Sample(BSDF& bsdf, bool adjoint)
     else if (std::get_if<LayeredBSDF>(&bsdf)) {
         return std::get<LayeredBSDF>(bsdf).Sample(adjoint);
     }
-    return InvalidSample;
+    return BSDFInvalidSample;
 }
 
 bool IsDelta(BSDF& bsdf)
