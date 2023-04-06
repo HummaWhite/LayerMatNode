@@ -6,13 +6,13 @@ bool Refract(Vec3f& wt, Vec3f n, Vec3f wi, float eta)
     float cosThetaI = Dot(n, wi);
     if (cosThetaI < 0)
         eta = 1.f / eta;
-    float sin2ThetaI = AiMax(0.f, 1.f - AiSqr(cosThetaI));
-    float sin2ThetaT = sin2ThetaI / AiSqr(eta);
+    float sin2ThetaI = Max(0.f, 1.f - Sqr(cosThetaI));
+    float sin2ThetaT = sin2ThetaI / Sqr(eta);
 
     if (sin2ThetaT >= 1.f)
         return false;
 
-    float cosThetaT = std::sqrt(1.f - sin2ThetaT);
+    float cosThetaT = Sqrt(1.f - sin2ThetaT);
     if (cosThetaT < 0)
         cosThetaT = -cosThetaT;
     wt = Normalize(-wi / eta + n * (cosThetaI / eta - cosThetaT));
@@ -32,16 +32,48 @@ float FresnelDielectric(float cosThetaI, float eta)
         cosThetaI = -cosThetaI;
     }
 
-    float sin2ThetaI = 1.f - AiSqr(cosThetaI);
-    float sin2ThetaT = sin2ThetaI / AiSqr(eta);
+    float sin2ThetaI = 1.f - Sqr(cosThetaI);
+    float sin2ThetaT = sin2ThetaI / Sqr(eta);
 
     if (sin2ThetaT >= 1.f)
         return 1.f;
-    float cosThetaT = std::sqrt(std::max(1.f - sin2ThetaT, 0.f));
+    float cosThetaT = Sqrt(1.f - sin2ThetaT);
 
     float rPa = (eta * cosThetaI - cosThetaT) / (eta * cosThetaI + cosThetaT);
     float rPe = (cosThetaI - eta * cosThetaT) / (cosThetaI + eta * cosThetaT);
-    return (AiSqr(rPa) + AiSqr(rPe)) * .5f;
+    return (Sqr(rPa) + Sqr(rPe)) * .5f;
+}
+
+struct PhaseSample
+{
+    PhaseSample(Vec3f w, float pdf) : w(w), pdf(pdf) {}
+    Vec3f w;
+    float pdf;
+};
+
+float HGPhaseFunction(float cosTheta, float g)
+{
+    float denom = 1.f + g * (g + 2 * cosTheta);
+    return .25f * AI_ONEOVERPI * (1 - g * g) / (denom * Sqrt(denom));
+}
+
+float HGPhasePDF(Vec3f wo, Vec3f wi, float g)
+{
+    return HGPhaseFunction(Dot(wo, wi), g);
+}
+
+PhaseSample HGPhaseSample(Vec3f wo, float g, Vec2f u)
+{
+    float g2 = g * g;
+    float cosTheta = (Abs(g) < 1e-3f) ?
+        1.f - 2.f * u.x :
+        -(1 + g2 - Sqr((1 - g2) / (1 + g - 2 * g * u.x)) / (2.f * g));
+
+    float sinTheta = Sqrt(1.f - cosTheta * cosTheta);
+    float phi = AI_PI * 2.f * u.y;
+    Vec3f wiLocal(std::cos(phi) * sinTheta, std::sin(phi) * sinTheta, cosTheta);
+
+    return PhaseSample(ToWorld(wo, wiLocal), HGPhaseFunction(cosTheta, g));
 }
 
 float FresnelConductor(float cosI, float eta, float k)
@@ -80,13 +112,13 @@ AtRGB LambertBSDF::F(Vec3f wi, bool adjoint)
 
 float LambertBSDF::PDF(Vec3f wi, bool adjoint)
 {
-    return std::max(wi.z, 0.f) * AI_ONEOVERPI;
+    return Max(wi.z, 0.f) * AI_ONEOVERPI;
 }
 
 BSDFSample LambertBSDF::Sample(bool adjoint)
 {
     Vec2f r = ToConcentricDisk(Sample2D(rng));
-    float z = std::sqrt(1.f - Dot(r, r));
+    float z = Sqrt(1.f - Dot(r, r));
     Vec3f w(r.x, r.y, z);
     return BSDFSample(w, albedo * AI_ONEOVERPI, z, AI_RAY_DIFFUSE_REFLECT);
 }
@@ -115,7 +147,7 @@ AtRGB DielectricBSDF::F(Vec3f wi, bool adjoint)
 
         denom *= std::abs(wi.z) * std::abs(wo.z);
         float fr = FresnelDielectric(Dot(wh, wi), eta);
-        float factor = adjoint ? 1.f : AiSqr(1.0f / eta);
+        float factor = adjoint ? 1.f : Sqr(1.0f / eta);
 
         return AtRGB((denom < 1e-7f) ? 0.f :
             std::abs(GTR2(wh.z, alpha) * SmithG(wo.z, wi.z, alpha) * whCosWo * whCosWi) / denom * (1.f - fr) * factor);
@@ -144,7 +176,7 @@ float DielectricBSDF::PDF(Vec3f wi, bool adjoint)
             return 0;
 
         float fr = FresnelDielectric(Dot(wh, wo), eta);
-        float dHdWi = AbsDot(wh, wi) / AiSqr(Dot(wh, wo) + eta * Dot(wh, wi));
+        float dHdWi = AbsDot(wh, wi) / Sqr(Dot(wh, wo) + eta * Dot(wh, wi));
         return GTR2(wh.z, alpha) * dHdWi * (1.f - fr);
     }
 }
@@ -168,7 +200,7 @@ BSDFSample DielectricBSDF::Sample(bool adjoint)
             if (!refr)
                 return BSDFInvalidSample;
 
-            float factor = adjoint ? 1.f : AiSqr(1.0f / eta);
+            float factor = adjoint ? 1.f : Sqr(1.0f / eta);
             return BSDFSample(wi, AtRGB(factor * (1.f - fr)), 1.f - fr, AI_RAY_SPECULAR_TRANSMIT, eta);
         }
     }
@@ -211,7 +243,7 @@ BSDFSample DielectricBSDF::Sample(bool adjoint)
             float sqrtDenom = Dot(wh, wo) + eta * Dot(wh, wi);
             float denom = sqrtDenom * sqrtDenom;
             float dHdWi = whCosWi / denom;
-            float factor = adjoint ? 1.f : AiSqr(1.0f / eta);
+            float factor = adjoint ? 1.f : Sqr(1.0f / eta);
 
             denom *= std::abs(wi.z) * std::abs(wo.z);
 

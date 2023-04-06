@@ -158,6 +158,39 @@ inline AtRGB Max(AtRGB a, AtRGB b)
 	return AtRGB(std::max(a.r, b.r), std::max(a.g, b.g), std::max(a.b, b.b));
 }
 
+inline float Sqr(float x)
+{
+	return x * x;
+}
+
+inline float Sqrt(float x)
+{
+	return std::sqrt(std::max(x, 0.f));
+}
+
+inline float Pow5(float x)
+{
+	float x2 = x * x;
+	return x2 * x2 * x;
+}
+
+inline float Abs(float x)
+{
+	return std::abs(x);
+}
+
+template<typename T>
+T Max(const T& a, const T& b)
+{
+	return std::max<T>(a, b);
+}
+
+template<typename T>
+T Min(const T& a, const T& b)
+{
+	return std::min<T>(a, b);
+}
+
 struct Vec2c
 {
 	Vec2c(float real, float img) : real(real), img(img) {}

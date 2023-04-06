@@ -21,7 +21,7 @@ float GTR2Visible(Vec3f wm, Vec3f wo, float alpha)
 Vec3f GTR2Sample(Vec3f wo, Vec2f u, float alpha)
 {
     Vec2f p = ToConcentricDisk(u);
-    Vec3f wh = Vec3f(p.x, p.y, std::sqrt(std::max(0.f, 1.f - Dot(p, p))));
+    Vec3f wh = Vec3f(p.x, p.y, Sqrt(1.f - Dot(p, p)));
     return Normalize(wh * Vec3f(alpha, alpha, 1.f));
 }
 
@@ -30,15 +30,15 @@ Vec3f GTR2SampleVisible(Vec3f wo, Vec2f u, float alpha)
     Vec3f vh = Normalize(wo) * Vec3f(alpha, alpha, 1.0f);
 
     float lensq = vh.x * vh.x + vh.y * vh.y;
-    Vec3f t1 = lensq > 0.0f ? Vec3f(-vh.y, vh.x, 0.0f) / std::sqrt(lensq) : Vec3f(1.0f, 0.0f, 0.0f);
+    Vec3f t1 = lensq > 0.0f ? Vec3f(-vh.y, vh.x, 0.0f) / Sqrt(lensq) : Vec3f(1.0f, 0.0f, 0.0f);
     Vec3f t2 = Cross(vh, t1);
 
     Vec2f p = ToConcentricDisk(u);
     float s = 0.5f * (1.0f + vh.z);
-    p.y = (1.0f - s) * std::sqrt(std::max(0.0f, 1.0f - p.x * p.x)) + s * p.y;
+    p.y = (1.0f - s) * Sqrt(Max(0.0f, 1.0f - p.x * p.x)) + s * p.y;
 
-    Vec3f wh = t1 * p.x + t2 * p.y + vh * std::sqrt(std::max(0.0f, 1.0f - Dot(p, p)));
-    return Normalize(Vec3f(wh.x * alpha, wh.y * alpha, std::max(0.0f, wh.z)));
+    Vec3f wh = t1 * p.x + t2 * p.y + vh * Sqrt(1.0f - Dot(p, p));
+    return Normalize(Vec3f(wh.x * alpha, wh.y * alpha, Max(0.0f, wh.z)));
 }
 
 float SchlickG(float cosTheta, float alpha)
@@ -50,12 +50,6 @@ float SchlickG(float cosTheta, float alpha)
 float SmithG(float cosThetaO, float cosThetaI, float alpha)
 {
     return SchlickG(std::abs(cosThetaO), alpha) * SchlickG(std::abs(cosThetaI), alpha);
-}
-
-float Pow5(float x)
-{
-    float x2 = x * x;
-    return x2 * x2 * x;
 }
 
 AtRGB SchlickF(float cosTheta, AtRGB F0)

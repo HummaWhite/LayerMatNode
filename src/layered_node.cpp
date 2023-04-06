@@ -8,7 +8,7 @@ AI_SHADER_NODE_EXPORT_METHODS(LayeredNodeMtd);
 
 enum LayeredNodeParams
 {
-	p_top_node = 2,
+	p_top_node = 1,
 	p_bottom_node,
 	p_thickness,
 	p_g,
@@ -18,8 +18,6 @@ enum LayeredNodeParams
 node_parameters
 {
 	AiParameterStr(NodeParamTypeName, LayeredNodeName);
-	AiParameterPtr(NodeParamBSDFPtr, nullptr);
-
 	AiParameterNode("top_bsdf", nullptr);
 	AiParameterNode("bottom_bsdf", nullptr);
 	AiParameterFlt("thickness", 1.f);
