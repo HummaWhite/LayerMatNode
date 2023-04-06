@@ -3,39 +3,36 @@
 
 #include "common.h"
 
-#define DECL_METHOD(tag, number) \
-    extern const AtNodeMethods* tag; \
-    namespace NodeMethod { const int tag = number; }
+#define DECL_METHOD(method, number) \
+    extern const AtNodeMethods* method; \
+    namespace NodeMethod { const int method = number; }
+
+#define DECL_CASE(method, nname) \
+	case NodeMethod::method: { \
+		node->methods = method; \
+		node->output_type = AI_TYPE_CLOSURE; \
+		node->name = nname; \
+		node->node_type = AI_NODE_SHADER; \
+		break; \
+	}
 
 DECL_METHOD(LayeredNodeMtd, 0);
 DECL_METHOD(LambertNodeMtd, 1);
 DECL_METHOD(DielectricNodeMtd, 2);
+DECL_METHOD(MetalNodeMtd, 3);
 
 //node_loader
 node_loader
 {
 	switch (i)
 	{
-	case NodeMethod::LayeredNodeMtd:
-		node->methods = LayeredNodeMtd;
-		node->output_type = AI_TYPE_CLOSURE;
-		node->name = LayeredNodeName;
-		node->node_type = AI_NODE_SHADER;
-		break;
+	DECL_CASE(LayeredNodeMtd, LayeredNodeName);
 
-	case NodeMethod::LambertNodeMtd:
-		node->methods = LambertNodeMtd;
-		node->output_type = AI_TYPE_CLOSURE;
-		node->name = LambertNodeName;
-		node->node_type = AI_NODE_SHADER;
-		break;
+	DECL_CASE(LambertNodeMtd, LambertNodeName);
 
-	case NodeMethod::DielectricNodeMtd:
-		node->methods = DielectricNodeMtd;
-		node->output_type = AI_TYPE_CLOSURE;
-		node->name = DielectricNodeName;
-		node->node_type = AI_NODE_SHADER;
-		break;
+	DECL_CASE(DielectricNodeMtd, DielectricNodeName);
+
+	DECL_CASE(MetalNodeMtd, MetalNodeName);
 
 	default:
 		return false;
