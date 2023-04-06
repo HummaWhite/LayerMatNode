@@ -16,29 +16,6 @@ const char DielectricNodeName[] = "DielectricNode";
 const char NodeParamTypeName[] = "type_name";
 const char NodeParamBSDFPtr[] = "bsdf_ptr";
 
-struct NodeParam
-{
-    NodeParam(const char* name, int id) : name(name), id(id) {}
-    const char* name;
-    int id;
-};
-
-inline void SetNodeMetaData(
-	AtList* params,
-	AtNodeEntry* entry,
-	const char* maya_name,
-	int maya_id,
-	const char* maya_classification,
-	const char* maya_output_name,
-	const char* node_type_name
-) {
-	AiMetaDataSetStr(entry, nullptr, "maya.name", maya_name);
-	AiMetaDataSetInt(entry, nullptr, "maya.id", maya_id);
-	AiMetaDataSetStr(entry, nullptr, "maya.classification", maya_classification);
-	AiMetaDataSetStr(entry, nullptr, "maya.output_name", maya_output_name);
-	AiParameterStr(NodeParamTypeName, node_type_name);
-}
-
 inline AtString GetNodeTypeName(const AtNode* node)
 {
 	return AiNodeGetStr(node, NodeParamTypeName);
@@ -85,29 +62,15 @@ BSDFT& AiBSDFGetDataRef(const AtBSDF* bsdf)
 	return *reinterpret_cast<BSDFT*>(AiBSDFGetData(bsdf));
 }
 
-inline float GetSample(AtSamplerIterator* itr)
-{
-	float r;
-	AiSamplerGetSample(itr, &r);
-	return r;
-}
+using Vec2f = AtVector2;
+using Vec3f = AtVector;
 
-inline AtVector2 GetSample2(AtSamplerIterator* itr)
-{
-	return AtVector2(GetSample(itr), GetSample(itr));
-}
-
-inline AtVector GetSample3(AtSamplerIterator* itr)
-{
-	return AtVector(GetSample(itr), GetSample(itr), GetSample(itr));
-}
-
-inline AtVector2 ToConcentricDisk(const AtVector2& uv)
+inline Vec2f ToConcentricDisk(Vec2f uv)
 {
 	if (uv.x == 0.0f && uv.y == 0.0f)
-		return AtVector2(0.f, 0.f);
+		return Vec2f(0.f, 0.f);
 
-	AtVector2 v = uv * 2.0f - 1.0f;
+	Vec2f v = uv * 2.0f - 1.0f;
 
 	float phi, r;
 	if (v.x * v.x > v.y * v.y)
@@ -120,12 +83,12 @@ inline AtVector2 ToConcentricDisk(const AtVector2& uv)
 		r = v.y;
 		phi = AI_PI * 0.5f - AI_PI * v.x / v.y * 0.25f;
 	}
-	return AtVector2(r * std::cos(phi), r * std::sin(phi));
+	return Vec2f(r * std::cos(phi), r * std::sin(phi));
 }
 
-inline AtVector ToLocal(const AtVector& n, const AtVector& w)
+inline Vec3f ToLocal(Vec3f n, Vec3f w)
 {
-	AtVector t, b;
+	Vec3f t, b;
 	AiV3BuildLocalFrame(t, b, n);
 	AtMatrix m;
 
@@ -138,9 +101,9 @@ inline AtVector ToLocal(const AtVector& n, const AtVector& w)
 	return AiM4VectorByMatrixMult(m, w);
 }
 
-inline AtVector ToWorld(const AtVector& n, const AtVector& w)
+inline Vec3f ToWorld(Vec3f n, Vec3f w)
 {
-	AtVector t, b;
+	Vec3f t, b;
 	AiV3BuildLocalFrame(t, b, n);
 	return t * w.x + b * w.y + n * w.z;
 }
@@ -154,3 +117,111 @@ inline bool IsTransmitRay(int type)
 {
 	return (type & AI_RAY_ALL_TRANSMIT) != 0;
 }
+
+inline float Dot(Vec2f a, Vec2f b)
+{
+	return AiV2Dot(a, b);
+}
+
+inline Vec3f Cross(Vec3f a, Vec3f b)
+{
+	return AiV3Cross(a, b);
+}
+
+inline float Dot(Vec3f a, Vec3f b)
+{
+	return AiV3Dot(a, b);
+}
+
+inline float SatDot(Vec3f a, Vec3f b)
+{
+	return std::max(Dot(a, b), 0.f);
+}
+
+inline float AbsDot(Vec3f a, Vec3f b)
+{
+	return std::abs(Dot(a, b));
+}
+
+inline bool SameHemisphere(Vec3f a, Vec3f b)
+{
+	return a.z * b.z > 0;
+}
+
+inline Vec3f Normalize(Vec3f v)
+{
+	return AiV3Normalize(v);
+}
+
+inline float Length(Vec3f v)
+{
+	return AiV3Length(v);
+}
+
+inline bool IsSmall(Vec3f v)
+{
+	return AiV3IsSmall(v);
+}
+
+inline AtRGB Max(AtRGB a, AtRGB b)
+{
+	return AtRGB(std::max(a.r, b.r), std::max(a.g, b.g), std::max(a.b, b.b));
+}
+
+struct Vec2c
+{
+	Vec2c(float real, float img) : real(real), img(img) {}
+
+	Vec2c operator + (const Vec2c& r) const
+	{
+		return Vec2c(real + r.real, img + r.img);
+	}
+
+	Vec2c operator - (const Vec2c& r) const
+	{
+		return Vec2c(real - r.real, img - r.img);
+	}
+
+	Vec2c operator * (const Vec2c& r) const
+	{
+		float pReal = real * r.real;
+		float pImg = img * r.img;
+		return Vec2c(pReal - pImg, pReal + pImg);
+	}
+
+	Vec2c operator * (float v) const
+	{
+		return Vec2c(real * v, img * v);
+	}
+
+	Vec2c operator / (const Vec2c& r) const
+	{
+		float pReal = real * r.real;
+		float pImg = img * r.img;
+		float scale = 1.f / r.LengthSqr();
+		return Vec2c(pReal + pImg, pReal - pImg) * scale;
+	}
+
+	Vec2c Sqrt() const
+	{
+		float n = std::sqrt(LengthSqr());
+		float t1 = std::sqrt(.5f * (n + std::abs(real)));
+		float t2 = .5f * img / t1;
+
+		if (n == 0)
+			return Vec2c(0.f, 0.f);
+
+		if (real >= 0)
+			return Vec2c(t1, t2);
+		else
+			return Vec2c(std::abs(t2), t1 * std::signbit(img));
+	}
+
+	float LengthSqr() const
+	{
+		return real * real + img * img;
+	}
+
+	float real;
+	float img;
+};

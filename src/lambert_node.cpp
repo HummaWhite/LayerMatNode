@@ -37,6 +37,7 @@ shader_evaluate
 	LambertBSDF lambertBSDF;
 	lambertBSDF.albedo = AiShaderEvalParamRGB(p_albedo);
 	lambertBSDF.rng.seed(sg->si << 16 | sg->tid);
+	lambertBSDF.SetDirections(sg);
 
 	auto bsdf = GetNodeLocalData<BSDF>(node);
 	*bsdf = lambertBSDF;

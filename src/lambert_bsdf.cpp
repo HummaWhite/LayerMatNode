@@ -20,13 +20,9 @@ bsdf_sample
 {
     auto fs = AiBSDFGetDataPtr<LambertBSDF>(bsdf);
     fs->rng.seed(*reinterpret_cast<const uint32_t*>(&rnd.x));
-
     BSDFSample sample = fs->Sample(false);
 
-    if (!sample.IsInvalid())
-        return AI_BSDF_LOBE_MASK_NONE;
-
-    if (sample.w.z < 0)
+    if (sample.IsInvalid())
         return AI_BSDF_LOBE_MASK_NONE;
 
     out_wi = AtVectorDv(ToWorld(fs->nf, sample.w));
@@ -38,13 +34,8 @@ bsdf_sample
 bsdf_eval
 {
     auto fs = AiBSDFGetDataPtr<LambertBSDF>(bsdf);
-    
-    AtVector wiLocal = ToLocal(fs->nf, wi);
-
-    if (wiLocal.z < 0)
-        return AI_BSDF_LOBE_MASK_NONE;
-
-    out_lobes[0] = AtBSDFLobeSample(fs->albedo * AI_ONEOVERPI, 0.f, fs->PDF(wiLocal, false));
+    Vec3f wiLocal = ToLocal(fs->nf, wi);
+    out_lobes[0] = AtBSDFLobeSample(fs->F(wiLocal, false), 0.f, fs->PDF(wiLocal, false));
     return lobe_mask;
 }
 
