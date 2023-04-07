@@ -15,11 +15,23 @@ enum LayeredNodeParams
 	p_albedo,
 };
 
+static BSDF VoidInterface = FakeBSDF();
+
+BSDF* GetNodeBSDF(const AtNode* node)
+{
+	if (!node)
+		return nullptr;
+	else if (AiNodeGetStr(node, NodeParamTypeName).empty())
+		return nullptr;
+	else
+		return GetNodeLocalData<BSDF>(node);
+}
+
 node_parameters
 {
 	AiParameterStr(NodeParamTypeName, LayeredNodeName);
-	AiParameterNode("top_bsdf", nullptr);
-	AiParameterNode("bottom_bsdf", nullptr);
+	AiParameterNode("top_node", nullptr);
+	AiParameterNode("bottom_node", nullptr);
 	AiParameterFlt("thickness", 1.f);
 	AiParameterFlt("g", 0.f);
 	AiParameterRGB("albedo", 1.f, 1.f, 1.f);
@@ -27,7 +39,8 @@ node_parameters
 
 node_initialize
 {
-	AiNodeSetLocalData(node, nullptr);
+	LayeredBSDF* layeredBSDF = new LayeredBSDF;
+	AiNodeSetLocalData(node, layeredBSDF);
 }
 
 node_update
@@ -36,28 +49,26 @@ node_update
 
 node_finish
 {
+	//delete GetNodeLocalData<LayeredBSDF>(node);
 }
 
 shader_evaluate
 {
-	auto top = reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_top_node));
-	auto bottom = reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_bottom_node));
-	float thickness = AiShaderEvalParamFlt(p_thickness);
-	float g = AiShaderEvalParamFlt(p_g);
-	AtRGB albedo = AiShaderEvalParamRGB(p_albedo);
+	BSDF* top = GetNodeBSDF(reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_top_node)));
+	BSDF* bottom = GetNodeBSDF(reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_bottom_node)));
 
-	AtRGB color;
-	if (top)
-	{
-		color = AiNodeGetRGB(top, "albedo");
-	}
-	else if (bottom)
-		color = AI_RGB_BLUE;
-	else
-		color = albedo;
+	LayeredBSDF layeredBSDF;
+	layeredBSDF.SetDirectionsAndRng(sg, true);
+	layeredBSDF.top = top ? top : &VoidInterface;
+	layeredBSDF.bottom = bottom ? bottom : &VoidInterface;
+	layeredBSDF.thickness = AiShaderEvalParamFlt(p_thickness);
+	layeredBSDF.g = AiShaderEvalParamFlt(p_g);
+	layeredBSDF.albedo = AiShaderEvalParamRGB(p_albedo);
+
+	auto bsdf = GetNodeLocalData<BSDF>(node);
+	*bsdf = layeredBSDF;
 
 	if (sg->Rt & AI_RAY_SHADOW)
 		return;
-	//sg->out.CLOSURE() = LambertBSDFCreate(sg, color);
-	sg->out.CLOSURE() = AiOrenNayarBSDF(sg, color, sg->Nf);
+	sg->out.CLOSURE() = AiLayeredBSDF(sg, layeredBSDF);
 }

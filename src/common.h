@@ -27,12 +27,6 @@ inline AtString GetNodeTypeName(const AtNode* node, AtShaderGlobals* sg)
 	return AiShaderEvalParamStr(0);
 }
 
-template<typename BSDFT>
-BSDFT* GetNodeBSDF(const AtNode* node)
-{
-	return reinterpret_cast<BSDFT*>(AiNodeGetPtr(node, NodeParamBSDFPtr));
-}
-
 template<typename T>
 T* GetNodeLocalData(const AtNode* node)
 {

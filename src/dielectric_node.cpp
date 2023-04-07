@@ -27,7 +27,7 @@ node_update
 
 node_finish
 {
-	delete GetNodeLocalData<BSDF>(node);
+	//delete GetNodeLocalData<BSDF>(node);
 }
 
 shader_evaluate

@@ -21,7 +21,7 @@ bsdf_sample
     if (sample.IsInvalid())
         return AI_BSDF_LOBE_MASK_NONE;
 
-    float cosWi = IsDeltaRay(sample.type) ? 1.f : std::abs(sample.w.z);
+    float cosWi = IsDeltaRay(sample.type) ? 1.f : Abs(sample.w.z);
 
     out_wi = AtVectorDv(ToWorld(fs->nf, sample.w));
     out_lobe_index = 0;

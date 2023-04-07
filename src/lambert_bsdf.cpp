@@ -23,7 +23,7 @@ bsdf_sample
 
     out_wi = AtVectorDv(ToWorld(fs->nf, sample.w));
     out_lobe_index = 0;
-    out_lobes[0] = AtBSDFLobeSample(sample.f, 0.0f, sample.pdf);
+    out_lobes[0] = AtBSDFLobeSample(sample.f * Abs(sample.w.z) / sample.pdf, 0.0f, sample.pdf);
     return lobe_mask;
 }
 

@@ -112,7 +112,7 @@ AtRGB LambertBSDF::F(Vec3f wi, bool adjoint)
 
 float LambertBSDF::PDF(Vec3f wi, bool adjoint)
 {
-    return Max(wi.z, 0.f) * AI_ONEOVERPI;
+    return Abs(wi.z) * AI_ONEOVERPI;
 }
 
 BSDFSample LambertBSDF::Sample(bool adjoint)
@@ -120,7 +120,7 @@ BSDFSample LambertBSDF::Sample(bool adjoint)
     Vec2f r = ToConcentricDisk(Sample2D(rng));
     float z = Sqrt(1.f - Dot(r, r));
     Vec3f w(r.x, r.y, z);
-    return BSDFSample(w, albedo * AI_ONEOVERPI, z, AI_RAY_DIFFUSE_REFLECT);
+    return BSDFSample(w, albedo * AI_ONEOVERPI, Abs(z) * AI_ONEOVERPI, AI_RAY_DIFFUSE_REFLECT);
 }
 
 AtRGB DielectricBSDF::F(Vec3f wi, bool adjoint)
@@ -307,17 +307,17 @@ BSDFSample MetalBSDF::Sample(bool adjoint)
 
 AtRGB LayeredBSDF::F(Vec3f wi, bool adjoint)
 {
-    return AtRGB();
+    return ::F(*top, wi, adjoint);
 }
 
 float LayeredBSDF::PDF(Vec3f wi, bool adjoint)
 {
-    return 0.0f;
+    return ::PDF(*top, wi, adjoint);
 }
 
 BSDFSample LayeredBSDF::Sample(bool adjoint)
 {
-    return BSDFInvalidSample;
+    return ::Sample(*top, adjoint);
 }
 
 bool LayeredBSDF::IsDelta() const
