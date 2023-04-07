@@ -35,9 +35,13 @@ bsdf_eval
 {
     auto fs = AiBSDFGetDataPtr<WithState<MetalBSDF>>(bsdf);
     auto& state = fs->state;
-
     Vec3f wiLocal = ToLocal(state.nf, wi);
-    out_lobes[0] = AtBSDFLobeSample(fs->bsdf.F(state.wo, wiLocal), 0.f, fs->bsdf.PDF(state.wo, wiLocal));
+
+    AtRGB f = fs->bsdf.F(state.wo, wiLocal);
+    float cosWi = fs->bsdf.IsDelta() ? 1.f : Abs(wiLocal.z);
+    float pdf = fs->bsdf.IsDelta() ? 1.f : fs->bsdf.PDF(state.wo, wiLocal);
+
+    out_lobes[0] = AtBSDFLobeSample(f, 0.f, pdf);
     return lobe_mask;
 }
 

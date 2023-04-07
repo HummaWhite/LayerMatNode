@@ -11,6 +11,8 @@
 
 struct BSDFSample
 {
+    BSDFSample() = default;
+
     BSDFSample(Vec3f w, AtRGB f, float pdf, int type, float eta = 1.f) :
         w(w), f(f), pdf(pdf), type(type), eta(eta) {}
 

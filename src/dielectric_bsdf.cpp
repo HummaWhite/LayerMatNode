@@ -35,9 +35,13 @@ bsdf_eval
 {
     auto fs = AiBSDFGetDataPtr<WithState<DielectricBSDF>>(bsdf);
     auto& state = fs->state;
-
     Vec3f wiLocal = ToLocal(state.nf, wi);
-    out_lobes[0] = AtBSDFLobeSample(fs->bsdf.F(state.wo, wiLocal, false), 0.f, fs->bsdf.PDF(state.wo, wiLocal, false));
+
+    AtRGB f = fs->bsdf.F(state.wo, wiLocal, false);
+    float cosWi = fs->bsdf.IsDelta() ? 1.f : Abs(wiLocal.z);
+    float pdf = fs->bsdf.IsDelta() ? 1.f : fs->bsdf.PDF(state.wo, wiLocal, false);
+
+    out_lobes[0] = AtBSDFLobeSample(f * cosWi / pdf, 0.f, pdf);
     return lobe_mask;
 }
 

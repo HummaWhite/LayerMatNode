@@ -25,7 +25,7 @@ bsdf_sample
 
     out_wi = AtVectorDv(ToWorld(state.nf, sample.w));
     out_lobe_index = 0;
-    out_lobes[0] = AtBSDFLobeSample(sample.f * Abs(sample.w.z) / sample.pdf, 0.0f, sample.pdf);
+    out_lobes[0] = AtBSDFLobeSample(fs->bsdf.albedo, 0.0f, sample.pdf);
     return lobe_mask;
 }
 
@@ -35,7 +35,7 @@ bsdf_eval
     auto& state = fs->state;
 
     Vec3f wiLocal = ToLocal(state.nf, wi);
-    out_lobes[0] = AtBSDFLobeSample(fs->bsdf.F(state.wo, wiLocal), 0.f, fs->bsdf.PDF(state.wo, wiLocal));
+    out_lobes[0] = AtBSDFLobeSample(fs->bsdf.albedo, 0.f, fs->bsdf.PDF(state.wo, wiLocal));
     return lobe_mask;
 }
 

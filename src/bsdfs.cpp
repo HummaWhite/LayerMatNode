@@ -282,24 +282,77 @@ BSDFSample MetalBSDF::Sample(Vec3f wo, RandomEngine& rng) const
 
 AtRGB LayeredBSDF::F(BSDFState& s, Vec3f wi, bool adjoint) const
 {
-    if (s.top)
-        return ::F(s.top->bsdf, s, wi, adjoint);
-    else
-        return AtRGB(0.f);
+    return AtRGB(0.f);
 }
 
 float LayeredBSDF::PDF(BSDFState& s, Vec3f wi, bool adjoint) const
 {
-    if (s.top)
-        return ::PDF(s.top->bsdf, s, wi, adjoint);
-    else
-        return 0.f;
+    return 1.f;
+}
+
+struct PathVertex {
+    int layer;
+    Vec3f wGiven, wSampled;
+    AtRGB fRegular, fAdjoint;
+    float pdfRegular, pdfAdjoint;
+};
+
+BSDFSample generatePath(
+    BSDFState& s,
+    Vec3f wGiven,
+    const std::vector<BSDF*> interfaces,
+    int maxDepth,
+    bool adjoint
+) {
+    int topLayer = (wGiven.z > 0) ? 0 : interfaces.size() - 1;
+    int bottomLayer = (topLayer == 0) ? interfaces.size() - 1 : 0;
+    int layer = topLayer;
+    bool goingDown = layer == 0;
+
+    BSDFSample bSample;
+    AtRGB throughput(1.f);
+    float pdf = 1.f;
+
+    for (int depth = 0; depth < maxDepth; depth++) {
+        if (layer < 0 || layer >= interfaces.size()) {
+            break;
+        }
+        PathVertex vertex;
+
+        BSDF* layerBSDF = interfaces[layer];
+
+        s.wo = wGiven;
+        auto bsdfSample = Sample(*layerBSDF, s, adjoint);
+
+        if (bsdfSample.IsInvalid()) {
+            return BSDFInvalidSample;
+        }
+        bSample = bsdfSample;
+
+        if (isnan(pdf)) {
+            return BSDFInvalidSample;
+        }
+
+        goingDown = bSample.w.z < 0;
+        bool isTop = layer == topLayer;
+
+        throughput *= bSample.f;
+        pdf *= bSample.pdf;
+
+        wGiven = -bSample.w;
+        layer += goingDown ? 1 : -1;
+    }
+    return BSDFSample(bSample.w, throughput, pdf, AI_RAY_DIFFUSE_REFLECT);
 }
 
 BSDFSample LayeredBSDF::Sample(BSDFState& s, bool adjoint) const
 {
-    if (s.top)
+    if (s.top && s.bottom)
+        return generatePath(s, s.wo, { &s.top->bsdf, &s.bottom->bsdf }, 7, adjoint);
+    else if (s.top)
         return ::Sample(s.top->bsdf, s, adjoint);
+    else if (s.bottom)
+        return ::Sample(s.bottom->bsdf, s, adjoint);
     else
         return BSDFInvalidSample;
 }
