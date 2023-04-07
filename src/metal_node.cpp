@@ -21,8 +21,7 @@ node_parameters
 
 node_initialize
 {
-	BSDF* bsdf = new BSDF;
-	AiNodeSetLocalData(node, bsdf);
+	AiNodeSetLocalData(node, new BSDFWithState);
 }
 
 node_update
@@ -37,16 +36,16 @@ node_finish
 shader_evaluate
 {
 	MetalBSDF metalBSDF;
-	metalBSDF.SetDirectionsAndRng(sg, false);
 	metalBSDF.albedo = AiShaderEvalParamRGB(p_albedo);
 	metalBSDF.ior = AiShaderEvalParamFlt(p_ior);
 	metalBSDF.k = AiShaderEvalParamFlt(p_k);
 	metalBSDF.alpha = AiSqr(AiShaderEvalParamFlt(p_roughness));
 
-	auto bsdf = GetNodeLocalData<BSDF>(node);
-	*bsdf = metalBSDF;
+	auto fs = GetNodeLocalData<BSDFWithState>(node);
+	fs->state.SetDirectionsAndRng(sg, false);
+	fs->bsdf = metalBSDF;
 
 	if (sg->Rt & AI_RAY_SHADOW)
 		return;
-	sg->out.CLOSURE() = AiMetalBSDF(sg, metalBSDF);
+	sg->out.CLOSURE() = AiMetalBSDF(sg, { metalBSDF, fs->state });
 }

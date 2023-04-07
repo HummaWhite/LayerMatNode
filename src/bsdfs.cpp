@@ -90,32 +90,7 @@ float FresnelConductor(float cosI, float eta, float k)
     return (rPa.LengthSqr() + rPe.LengthSqr()) * .5f;
 }
 
-AtRGB FakeBSDF::F(Vec3f wi, bool adjoint)
-{
-    return AtRGB(0.f);
-}
-
-float FakeBSDF::PDF(Vec3f wi, bool adjoint)
-{
-    return 0.0f;
-}
-
-BSDFSample FakeBSDF::Sample(bool adjoint)
-{
-    return { -wo, AtRGB(1.f), 1.f, AI_RAY_SPECULAR_TRANSMIT };
-}
-
-AtRGB LambertBSDF::F(Vec3f wi, bool adjoint)
-{
-    return albedo * AI_ONEOVERPI;
-}
-
-float LambertBSDF::PDF(Vec3f wi, bool adjoint)
-{
-    return Abs(wi.z) * AI_ONEOVERPI;
-}
-
-BSDFSample LambertBSDF::Sample(bool adjoint)
+BSDFSample LambertBSDF::Sample(Vec3f wo, RandomEngine& rng) const
 {
     Vec2f r = ToConcentricDisk(Sample2D(rng));
     float z = Sqrt(1.f - Dot(r, r));
@@ -123,7 +98,7 @@ BSDFSample LambertBSDF::Sample(bool adjoint)
     return BSDFSample(w, albedo * AI_ONEOVERPI, Abs(z) * AI_ONEOVERPI, AI_RAY_DIFFUSE_REFLECT);
 }
 
-AtRGB DielectricBSDF::F(Vec3f wi, bool adjoint)
+AtRGB DielectricBSDF::F(Vec3f wo, Vec3f wi, bool adjoint) const
 {
     if (ApproxDelta())
         return AtRGB(0.f);
@@ -154,7 +129,7 @@ AtRGB DielectricBSDF::F(Vec3f wi, bool adjoint)
     }
 }
 
-float DielectricBSDF::PDF(Vec3f wi, bool adjoint)
+float DielectricBSDF::PDF(Vec3f wo, Vec3f wi, bool adjoint) const
 {
     if (ApproxDelta())
         return 0;
@@ -181,7 +156,7 @@ float DielectricBSDF::PDF(Vec3f wi, bool adjoint)
     }
 }
 
-BSDFSample DielectricBSDF::Sample(bool adjoint)
+BSDFSample DielectricBSDF::Sample(Vec3f wo, bool adjoint, RandomEngine& rng) const
 {
     if (ApproxDelta())
     {
@@ -259,7 +234,7 @@ BSDFSample DielectricBSDF::Sample(bool adjoint)
     }
 }
 
-AtRGB MetalBSDF::F(Vec3f wi, bool adjoint)
+AtRGB MetalBSDF::F(Vec3f wo, Vec3f wi) const
 {
     if (!SameHemisphere(wo, wi) || ApproxDelta())
         return AtRGB(0.f);
@@ -276,7 +251,7 @@ AtRGB MetalBSDF::F(Vec3f wi, bool adjoint)
     return albedo * GTR2(wh.z, alpha) * fr * SmithG(wo.z, wi.z, alpha) / (4.f * cosWo * cosWi);
 }
 
-float MetalBSDF::PDF(Vec3f wi, bool adjoint)
+float MetalBSDF::PDF(Vec3f wo, Vec3f wi) const
 {
     if (!SameHemisphere(wo, wi) || ApproxDelta())
         return 0.f;
@@ -285,7 +260,7 @@ float MetalBSDF::PDF(Vec3f wi, bool adjoint)
     return GTR2Visible(wh, wo, alpha) / (4.f * AbsDot(wh, wo));
 }
 
-BSDFSample MetalBSDF::Sample(bool adjoint)
+BSDFSample MetalBSDF::Sample(Vec3f wo, RandomEngine& rng) const
 {
     if (ApproxDelta())
     {
@@ -301,201 +276,130 @@ BSDFSample MetalBSDF::Sample(bool adjoint)
         if (!SameHemisphere(wo, wi))
             return BSDFInvalidSample;
 
-        return BSDFSample(wi, F(wi, adjoint), PDF(wi, adjoint), AI_RAY_DIFFUSE_REFLECT);
+        return BSDFSample(wi, F(wo, wi), PDF(wo, wi), AI_RAY_DIFFUSE_REFLECT);
     }
 }
 
-AtRGB LayeredBSDF::F(Vec3f wi, bool adjoint)
+AtRGB LayeredBSDF::F(BSDFState& s, Vec3f wi, bool adjoint) const
 {
-    return ::F(*top, wi, adjoint);
+    if (s.top)
+        return ::F(s.top->bsdf, s, wi, adjoint);
+    else
+        return AtRGB(0.f);
 }
 
-float LayeredBSDF::PDF(Vec3f wi, bool adjoint)
+float LayeredBSDF::PDF(BSDFState& s, Vec3f wi, bool adjoint) const
 {
-    return ::PDF(*top, wi, adjoint);
+    if (s.top)
+        return ::PDF(s.top->bsdf, s, wi, adjoint);
+    else
+        return 0.f;
 }
 
-BSDFSample LayeredBSDF::Sample(bool adjoint)
+BSDFSample LayeredBSDF::Sample(BSDFState& s, bool adjoint) const
 {
-    return ::Sample(*top, adjoint);
+    if (s.top)
+        return ::Sample(s.top->bsdf, s, adjoint);
+    else
+        return BSDFInvalidSample;
 }
 
-bool LayeredBSDF::IsDelta() const
-{
-    bool delta = true;
-    if (top)
-        delta &= ::IsDelta(*top);
-    if (bottom)
-        delta &= ::IsDelta(*bottom);
-    return delta;
-}
-
-bool LayeredBSDF::HasTransmit() const
-{
-    bool transmit = false;
-    if (top)
-        transmit |= ::IsDelta(*top);
-    if (bottom)
-        transmit |= ::IsDelta(*bottom);
-    return transmit;
-}
-
-BSDFState* GetState(BSDF& bsdf)
+AtRGB F(const BSDF& bsdf, BSDFState& s, Vec3f wi, bool adjoint)
 {
     if (std::get_if<FakeBSDF>(&bsdf)) {
-        return reinterpret_cast<BSDFState*>(std::get_if<FakeBSDF>(&bsdf));
+        return std::get_if<FakeBSDF>(&bsdf)->F(s.wo, wi);
     }
     else if (std::get_if<LambertBSDF>(&bsdf)) {
-        return reinterpret_cast<BSDFState*>(std::get_if<LambertBSDF>(&bsdf));
+        return std::get_if<LambertBSDF>(&bsdf)->F(s.wo, wi);
     }
     else if (std::get_if<DielectricBSDF>(&bsdf)) {
-        return reinterpret_cast<BSDFState*>(std::get_if<DielectricBSDF>(&bsdf));
+        return std::get_if<DielectricBSDF>(&bsdf)->F(s.wo, wi, adjoint);
     }
     else if (std::get_if<MetalBSDF>(&bsdf)) {
-        return reinterpret_cast<BSDFState*>(std::get_if<MetalBSDF>(&bsdf));
+        return std::get_if<MetalBSDF>(&bsdf)->F(s.wo, wi);
     }
     else if (std::get_if<LayeredBSDF>(&bsdf)) {
-        return reinterpret_cast<BSDFState*>(std::get_if<LayeredBSDF>(&bsdf));
-    }
-    return nullptr;
-}
-
-AtRGB F(BSDF& bsdf, Vec3f wi, bool adjoint)
-{
-    if (std::get_if<FakeBSDF>(&bsdf)) {
-        return std::get<FakeBSDF>(bsdf).F(wi, adjoint);
-    }
-    else if (std::get_if<LambertBSDF>(&bsdf)) {
-        return std::get<LambertBSDF>(bsdf).F(wi, adjoint);
-    }
-    else if (std::get_if<DielectricBSDF>(&bsdf)) {
-        return std::get<DielectricBSDF>(bsdf).F(wi, adjoint);
-    }
-    else if (std::get_if<MetalBSDF>(&bsdf)) {
-        return std::get<MetalBSDF>(bsdf).F(wi, adjoint);
-    }
-    else if (std::get_if<LayeredBSDF>(&bsdf)) {
-        return std::get<LayeredBSDF>(bsdf).F(wi, adjoint);
+        return std::get_if<LayeredBSDF>(&bsdf)->F(s, wi, adjoint);
     }
     return AtRGB(0.f);
 }
 
-float PDF(BSDF& bsdf, Vec3f wi, bool adjoint)
+float PDF(const BSDF& bsdf, BSDFState& s, Vec3f wi, bool adjoint)
 {
     if (std::get_if<FakeBSDF>(&bsdf)) {
-        return std::get<FakeBSDF>(bsdf).PDF(wi, adjoint);
+        return std::get_if<FakeBSDF>(&bsdf)->PDF(s.wo, wi);
     }
     else if (std::get_if<LambertBSDF>(&bsdf)) {
-        return std::get<LambertBSDF>(bsdf).PDF(wi, adjoint);
+        return std::get_if<LambertBSDF>(&bsdf)->PDF(s.wo, wi);
     }
     else if (std::get_if<DielectricBSDF>(&bsdf)) {
-        return std::get<DielectricBSDF>(bsdf).PDF(wi, adjoint);
+        return std::get_if<DielectricBSDF>(&bsdf)->PDF(s.wo, wi, adjoint);
     }
     else if (std::get_if<MetalBSDF>(&bsdf)) {
-        return std::get<MetalBSDF>(bsdf).PDF(wi, adjoint);
+        return std::get_if<MetalBSDF>(&bsdf)->PDF(s.wo, wi);
     }
     else if (std::get_if<LayeredBSDF>(&bsdf)) {
-        return std::get<LayeredBSDF>(bsdf).PDF(wi, adjoint);
+        return std::get_if<LayeredBSDF>(&bsdf)->PDF(s, wi, adjoint);
     }
     return 0.f;
 }
 
-BSDFSample Sample(BSDF& bsdf, bool adjoint)
+BSDFSample Sample(const BSDF& bsdf, BSDFState& s, bool adjoint)
 {
     if (std::get_if<FakeBSDF>(&bsdf)) {
-        return std::get<FakeBSDF>(bsdf).Sample(adjoint);
+        return std::get_if<FakeBSDF>(&bsdf)->Sample(s.wo);
     }
     else if (std::get_if<LambertBSDF>(&bsdf)) {
-        return std::get<LambertBSDF>(bsdf).Sample(adjoint);
+        return std::get_if<LambertBSDF>(&bsdf)->Sample(s.wo, s.rng);
     }
     else if (std::get_if<DielectricBSDF>(&bsdf)) {
-        return std::get<DielectricBSDF>(bsdf).Sample(adjoint);
+        return std::get_if<DielectricBSDF>(&bsdf)->Sample(s.wo, adjoint, s.rng);
     }
     else if (std::get_if<MetalBSDF>(&bsdf)) {
-        return std::get<MetalBSDF>(bsdf).Sample(adjoint);
+        return std::get_if<MetalBSDF>(&bsdf)->Sample(s.wo, s.rng);
     }
     else if (std::get_if<LayeredBSDF>(&bsdf)) {
-        return std::get<LayeredBSDF>(bsdf).Sample(adjoint);
+        return std::get_if<LayeredBSDF>(&bsdf)->Sample(s, adjoint);
     }
     return BSDFInvalidSample;
 }
 
-bool IsDelta(BSDF& bsdf)
+bool IsDelta(const BSDF& bsdf)
 {
     if (std::get_if<FakeBSDF>(&bsdf)) {
-        return std::get<FakeBSDF>(bsdf).IsDelta();
+        return std::get_if<FakeBSDF>(&bsdf)->IsDelta();
     }
     else if (std::get_if<LambertBSDF>(&bsdf)) {
-        return std::get<LambertBSDF>(bsdf).IsDelta();
+        return std::get_if<LambertBSDF>(&bsdf)->IsDelta();
     }
     else if (std::get_if<DielectricBSDF>(&bsdf)) {
-        return std::get<DielectricBSDF>(bsdf).IsDelta();
+        return std::get_if<DielectricBSDF>(&bsdf)->IsDelta();
     }
     else if (std::get_if<MetalBSDF>(&bsdf)) {
-        return std::get<MetalBSDF>(bsdf).IsDelta();
+        return std::get_if<MetalBSDF>(&bsdf)->IsDelta();
     }
     else if (std::get_if<LayeredBSDF>(&bsdf)) {
-        return std::get<LayeredBSDF>(bsdf).IsDelta();
+        return std::get_if<LayeredBSDF>(&bsdf)->IsDelta();
     }
     return false;
 }
 
-bool HasTransmit(BSDF& bsdf)
+bool HasTransmit(const BSDF& bsdf)
 {
     if (std::get_if<FakeBSDF>(&bsdf)) {
-        return std::get<FakeBSDF>(bsdf).HasTransmit();
+        return std::get_if<FakeBSDF>(&bsdf)->HasTransmit();
     }
     else if (std::get_if<LambertBSDF>(&bsdf)) {
-        return std::get<LambertBSDF>(bsdf).HasTransmit();
+        return std::get_if<LambertBSDF>(&bsdf)->HasTransmit();
     }
     else if (std::get_if<DielectricBSDF>(&bsdf)) {
-        return std::get<DielectricBSDF>(bsdf).HasTransmit();
+        return std::get_if<DielectricBSDF>(&bsdf)->HasTransmit();
     }
     else if (std::get_if<MetalBSDF>(&bsdf)) {
-        return std::get<MetalBSDF>(bsdf).HasTransmit();
+        return std::get_if<MetalBSDF>(&bsdf)->HasTransmit();
     }
     else if (std::get_if<LayeredBSDF>(&bsdf)) {
-        return std::get<LayeredBSDF>(bsdf).HasTransmit();
+        return std::get_if<LayeredBSDF>(&bsdf)->HasTransmit();
     }
     return false;
-}
-
-Vec3f& Nf(BSDF& bsdf)
-{
-    auto state = GetState(bsdf);
-    if (state)
-        return state->nf;
-    throw std::runtime_error("impossible");
-}
-
-Vec3f& Ns(BSDF& bsdf)
-{
-    auto state = GetState(bsdf);
-    if (state)
-        return state->ns;
-    throw std::runtime_error("impossible");
-}
-
-Vec3f& Ng(BSDF& bsdf)
-{
-    auto state = GetState(bsdf);
-    if (state)
-        return state->ng;
-    throw std::runtime_error("impossible");
-}
-
-Vec3f& Wo(BSDF& bsdf)
-{
-    auto state = GetState(bsdf);
-    if (state)
-        return state->wo;
-    throw std::runtime_error("impossible");
-}
-
-RandomEngine& Rng(BSDF& bsdf)
-{
-    auto state = GetState(bsdf);
-    if (state)
-        return state->rng;
-    throw std::runtime_error("impossible");
 }

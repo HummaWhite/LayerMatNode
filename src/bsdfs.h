@@ -28,6 +28,8 @@ struct BSDFSample
 
 const BSDFSample BSDFInvalidSample(Vec3f(), AtRGB(), 0, AI_RAY_UNDEFINED);
 
+struct BSDFWithState;
+
 struct BSDFState
 {
     BSDFState() = default;
@@ -47,7 +49,7 @@ struct BSDFState
     void SetDirectionsAndRng(const AtShaderGlobals* sg, bool keepNormalFacing)
     {
         SetDirections(sg, keepNormalFacing);
-        rng.seed(sg->si << 16 | sg->tid);
+        threadId = sg->si << 16 | sg->tid;
     }
 
     // front-facing mapped smooth normal
@@ -58,35 +60,39 @@ struct BSDFState
     Vec3f ng;
     // outgoing direction of light transport in local coordinate
     Vec3f wo;
-    //
+    // sampler
     RandomEngine rng;
+    int threadId;
+
+    BSDFWithState* top = nullptr;
+    BSDFWithState* bottom = nullptr;
 };
 
-struct FakeBSDF : BSDFState
+struct FakeBSDF
 {
-    AtRGB F(Vec3f wi, bool adjoint);
-    float PDF(Vec3f wi, bool adjoint);
-    BSDFSample Sample(bool adjoint);
+    AtRGB F(Vec3f wo, Vec3f wi) const { return AtRGB(0.f); }
+    float PDF(Vec3f wo, Vec3f wi) const { return 0.f; }
+    BSDFSample Sample(Vec3f wo) const { return BSDFSample(-wo, AtRGB(1.f), 1.f, AI_RAY_SPECULAR_TRANSMIT); }
     bool IsDelta() const { return true; }
     bool HasTransmit() const { return true; }
 };
 
-struct LambertBSDF : BSDFState
+struct LambertBSDF
 {
-    AtRGB F(Vec3f wi, bool adjoint);
-    float PDF(Vec3f wi, bool adjoint);
-    BSDFSample Sample(bool adjoint);
+    AtRGB F(Vec3f wo, Vec3f wi) const { return albedo * AI_ONEOVERPI; }
+    float PDF(Vec3f wo, Vec3f wi) const { return Abs(wi.z) * AI_ONEOVERPI; }
+    BSDFSample Sample(Vec3f wo, RandomEngine& rng) const;
     bool IsDelta() const { return false; }
     bool HasTransmit() const { return false; }
 
     AtRGB albedo = AtRGB(.8f);
 };
 
-struct DielectricBSDF : BSDFState
+struct DielectricBSDF
 {
-    AtRGB F(Vec3f wi, bool adjoint);
-    float PDF(Vec3f wi, bool adjoint);
-    BSDFSample Sample(bool adjoint);
+    AtRGB F(Vec3f wo, Vec3f wi, bool adjoint) const;
+    float PDF(Vec3f wo, Vec3f wi, bool adjoint) const;
+    BSDFSample Sample(Vec3f wo, bool adjoint, RandomEngine& rng) const;
     bool IsDelta() const { return ApproxDelta(); }
     bool HasTransmit() const { return true; }
     bool ApproxDelta() const { return alpha < 1e-4f; }
@@ -95,11 +101,11 @@ struct DielectricBSDF : BSDFState
     float alpha;
 };
 
-struct MetalBSDF : BSDFState
+struct MetalBSDF
 {
-    AtRGB F(Vec3f wi, bool adjoint);
-    float PDF(Vec3f wi, bool adjoint);
-    BSDFSample Sample(bool adjoint);
+    AtRGB F(Vec3f wo, Vec3f wi) const;
+    float PDF(Vec3f wo, Vec3f wi) const;
+    BSDFSample Sample(Vec3f wo, RandomEngine& rng) const;
     bool IsDelta() const { return ApproxDelta(); }
     bool HasTransmit() const { return true; }
     bool ApproxDelta() const { return alpha < 1e-4f; }
@@ -110,42 +116,58 @@ struct MetalBSDF : BSDFState
     float alpha;
 };
 
-struct LayeredBSDF;
-using BSDF = std::variant<FakeBSDF, LambertBSDF, DielectricBSDF, MetalBSDF, LayeredBSDF>;
-
-struct LayeredBSDF : BSDFState
+struct LayeredBSDF
 {
-    AtRGB F(Vec3f wi, bool adjoint);
-    float PDF(Vec3f wi, bool adjoint);
-    BSDFSample Sample(bool adjoint);
-    bool IsDelta() const;
-    bool HasTransmit() const;
+    AtRGB F(BSDFState& s, Vec3f wi, bool adjoint) const;
+    float PDF(BSDFState& s, Vec3f wi, bool adjoint) const;
+    BSDFSample Sample(BSDFState& s, bool adjoint) const;
+    bool IsDelta() const { return false; }
+    bool HasTransmit() const { return true; }
 
-    BSDF* top = nullptr;
-    BSDF* bottom = nullptr;
     float thickness;
     float g;
     AtRGB albedo;
 };
 
-BSDFState* GetState(BSDF& bsdf);
-AtRGB F(BSDF& bsdf, Vec3f wi, bool adjoint);
-float PDF(BSDF& bsdf, Vec3f wi, bool adjoint);
-BSDFSample Sample(BSDF& bsdf, bool adjoint);
-bool IsDelta(BSDF& bsdf);
-bool HasTransmit(BSDF& bsdf);
-Vec3f& Nf(BSDF& bsdf);
-Vec3f& Ns(BSDF& bsdf);
-Vec3f& Ng(BSDF& bsdf);
-Vec3f& Wo(BSDF& bsdf);
-RandomEngine& Rng(BSDF& bsdf);
+using BSDF = std::variant<FakeBSDF, LambertBSDF, DielectricBSDF, MetalBSDF, LayeredBSDF>;
+
+struct BSDFWithState
+{
+    BSDFWithState() = default;
+    BSDFWithState(const BSDF& bsdf, const BSDFState& state) : bsdf(bsdf), state(state) {}
+
+    template<typename BSDFT>
+    BSDFT& Get()
+    {
+        return std::get<BSDFT>(bsdf);
+    }
+
+    BSDF bsdf;
+    BSDFState state;
+};
+
+template<typename BSDFT>
+struct WithState
+{
+    WithState(const BSDFT& bsdf, const BSDFState& state) : bsdf(bsdf), state(state) {}
+    BSDFT bsdf;
+    BSDFState state;
+};
+
+// TODO:
+// replace with std::visit if applicable
+AtRGB F(const BSDF& bsdf, BSDFState& s, Vec3f wi, bool adjoint);
+float PDF(const BSDF& bsdf, BSDFState& s, Vec3f wi, bool adjoint);
+BSDFSample Sample(const BSDF& bsdf, BSDFState& s, bool adjoint);
+bool IsDelta(const BSDF& bsdf);
+bool HasTransmit(const BSDF& bsdf);
 
 bool Refract(Vec3f& wt, Vec3f n, Vec3f wi, float eta);
 bool Refract(Vec3f& wt, Vec3f wi, float eta);
 float FresnelDielectric(float cosThetaI, float eta);
 float FresnelConductor(float cosThetaI, float eta, float k);
 
-AtBSDF* AiLambertBSDF(const AtShaderGlobals* sg, const LambertBSDF& lambertBSDF);
-AtBSDF* AiDielectricBSDF(const AtShaderGlobals* sg, const DielectricBSDF& dielectricBSDF);
-AtBSDF* AiMetalBSDF(const AtShaderGlobals* sg, const MetalBSDF& metalBSDF);
-AtBSDF* AiLayeredBSDF(const AtShaderGlobals* sg, const LayeredBSDF& layeredBDSF);
+AtBSDF* AiLambertBSDF(const AtShaderGlobals* sg, const WithState<LambertBSDF>& lambertBSDF);
+AtBSDF* AiDielectricBSDF(const AtShaderGlobals* sg, const WithState<DielectricBSDF>& dielectricBSDF);
+AtBSDF* AiMetalBSDF(const AtShaderGlobals* sg, const WithState<MetalBSDF>& metalBSDF);
+AtBSDF* AiLayeredBSDF(const AtShaderGlobals* sg, const WithState<LayeredBSDF>& layeredBDSF);

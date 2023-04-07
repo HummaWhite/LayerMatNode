@@ -17,8 +17,7 @@ node_parameters
 
 node_initialize
 {
-	BSDF* bsdf = new BSDF;
-	AiNodeSetLocalData(node, bsdf);
+	AiNodeSetLocalData(node, new BSDFWithState);
 }
 
 node_update
@@ -33,14 +32,14 @@ node_finish
 shader_evaluate
 {
 	DielectricBSDF dielectricBSDF;
-	dielectricBSDF.SetDirectionsAndRng(sg, true);
 	dielectricBSDF.ior = AiShaderEvalParamFlt(p_ior);
 	dielectricBSDF.alpha = AiSqr(AiShaderEvalParamFlt(p_roughness));
 
-	auto bsdf = GetNodeLocalData<BSDF>(node);
-	*bsdf = dielectricBSDF;
+	auto fs = GetNodeLocalData<BSDFWithState>(node);
+	fs->state.SetDirectionsAndRng(sg, true);
+	fs->bsdf = dielectricBSDF;
 
 	if (sg->Rt & AI_RAY_SHADOW)
 		return;
-	sg->out.CLOSURE() = AiDielectricBSDF(sg, dielectricBSDF);
+	sg->out.CLOSURE() = AiDielectricBSDF(sg, { dielectricBSDF, fs->state });
 }

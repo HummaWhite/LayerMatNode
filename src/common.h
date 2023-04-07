@@ -185,6 +185,11 @@ T Min(const T& a, const T& b)
 	return std::min<T>(a, b);
 }
 
+inline int FloatBitsToInt(float x)
+{
+	return *reinterpret_cast<int*>(&x);
+}
+
 struct Vec2c
 {
 	Vec2c(float real, float img) : real(real), img(img) {}

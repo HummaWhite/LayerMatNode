@@ -15,16 +15,14 @@ enum LayeredNodeParams
 	p_albedo,
 };
 
-static BSDF VoidInterface = FakeBSDF();
-
-BSDF* GetNodeBSDF(const AtNode* node)
+BSDFWithState* GetNodeBSDFWithState(const AtNode* node)
 {
 	if (!node)
 		return nullptr;
 	else if (AiNodeGetStr(node, NodeParamTypeName).empty())
 		return nullptr;
 	else
-		return GetNodeLocalData<BSDF>(node);
+		return GetNodeLocalData<BSDFWithState>(node);
 }
 
 node_parameters
@@ -39,8 +37,7 @@ node_parameters
 
 node_initialize
 {
-	LayeredBSDF* layeredBSDF = new LayeredBSDF;
-	AiNodeSetLocalData(node, layeredBSDF);
+	AiNodeSetLocalData(node, new BSDFWithState);
 }
 
 node_update
@@ -54,21 +51,21 @@ node_finish
 
 shader_evaluate
 {
-	BSDF* top = GetNodeBSDF(reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_top_node)));
-	BSDF* bottom = GetNodeBSDF(reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_bottom_node)));
+	BSDFWithState* top = GetNodeBSDFWithState(reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_top_node)));
+	BSDFWithState* bottom = GetNodeBSDFWithState(reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_bottom_node)));
 
 	LayeredBSDF layeredBSDF;
-	layeredBSDF.SetDirectionsAndRng(sg, true);
-	layeredBSDF.top = top ? top : &VoidInterface;
-	layeredBSDF.bottom = bottom ? bottom : &VoidInterface;
 	layeredBSDF.thickness = AiShaderEvalParamFlt(p_thickness);
 	layeredBSDF.g = AiShaderEvalParamFlt(p_g);
 	layeredBSDF.albedo = AiShaderEvalParamRGB(p_albedo);
 
-	auto bsdf = GetNodeLocalData<BSDF>(node);
-	*bsdf = layeredBSDF;
+	auto fs = GetNodeLocalData<BSDFWithState>(node);
+	fs->state.SetDirectionsAndRng(sg, true);
+	fs->state.top = top;
+	fs->state.bottom = bottom;
+	fs->bsdf = layeredBSDF;
 
 	if (sg->Rt & AI_RAY_SHADOW)
 		return;
-	sg->out.CLOSURE() = AiLayeredBSDF(sg, layeredBSDF);
+	sg->out.CLOSURE() = AiLayeredBSDF(sg, { layeredBSDF, fs->state });
 }
