@@ -254,7 +254,7 @@ AtRGB MetalBSDF::F(Vec3f wo, Vec3f wi) const
 float MetalBSDF::PDF(Vec3f wo, Vec3f wi) const
 {
     if (!SameHemisphere(wo, wi) || ApproxDelta())
-        return 0.f;
+        return 0;
 
     Vec3f wh = Normalize(wo + wi);
     return GTR2Visible(wh, wo, alpha) / (4.f * AbsDot(wh, wo));

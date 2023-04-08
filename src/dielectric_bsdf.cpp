@@ -41,7 +41,13 @@ bsdf_eval
     float cosWi = fs->bsdf.IsDelta() ? 1.f : Abs(wiLocal.z);
     float pdf = fs->bsdf.IsDelta() ? 1.f : fs->bsdf.PDF(state.wo, wiLocal, false);
 
-    out_lobes[0] = AtBSDFLobeSample(f * cosWi / pdf, 0.f, pdf);
+    AtRGB weight;
+    if (pdf == 0)
+        weight = 0;
+    else
+        weight = f * cosWi / pdf;
+
+    out_lobes[0] = AtBSDFLobeSample(weight, 0.f, pdf);
     return lobe_mask;
 }
 

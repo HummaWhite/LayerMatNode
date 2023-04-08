@@ -42,7 +42,8 @@ shader_evaluate
 	metalBSDF.alpha = AiSqr(AiShaderEvalParamFlt(p_roughness));
 
 	auto fs = GetNodeLocalData<BSDFWithState>(node);
-	fs->state.SetDirectionsAndRng(sg, false);
+	//fs->state.SetDirectionsAndRng(sg, false);
+	fs->state.SetNormalFromNode(sg);
 	fs->bsdf = metalBSDF;
 
 	if (sg->Rt & AI_RAY_SHADOW)

@@ -36,6 +36,11 @@ struct BSDFState
 {
     BSDFState() = default;
 
+    void SetNormalFromNode(const AtShaderGlobals* sg)
+    {
+        n = sg->N;
+    }
+
     void SetDirections(const AtShaderGlobals* sg, bool keepNormalFacing)
     {
         if (!keepNormalFacing)
@@ -53,7 +58,7 @@ struct BSDFState
         SetDirections(sg, keepNormalFacing);
         threadId = sg->si << 16 | sg->tid;
     }
-
+    Vec3f n;
     // front-facing mapped smooth normal
     Vec3f nf;
     // front-facing smooth normal without normal map

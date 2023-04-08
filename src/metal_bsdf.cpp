@@ -5,11 +5,12 @@ AI_BSDF_EXPORT_METHODS(MetalBSDFMtd);
 bsdf_init
 {
     auto fs = AiBSDFGetDataPtr<WithState<MetalBSDF>>(bsdf);
+    fs->state.SetDirections(sg, false);
 
     static const AtBSDFLobeInfo lobe_info[] = { {AI_RAY_ALL, 0, AtString()} };
 
     AiBSDFInitLobes(bsdf, lobe_info, 1);
-    AiBSDFInitNormal(bsdf, fs->state.nf, false);
+    AiBSDFInitNormal(bsdf, fs->state.n, false);
 }
 
 bsdf_sample
@@ -25,9 +26,11 @@ bsdf_sample
 
     float cosWi = IsDeltaRay(sample.type) ? 1.f : Abs(sample.w.z);
 
+    float weight = AiBSDFBumpShadow(state.ns, state.n, ToWorld(state.nf, sample.w));
+
     out_wi = AtVectorDv(ToWorld(state.nf, sample.w));
     out_lobe_index = 0;
-    out_lobes[0] = AtBSDFLobeSample(sample.f * cosWi / sample.pdf, 0.0f, sample.pdf);
+    out_lobes[0] = AtBSDFLobeSample(sample.f * cosWi / sample.pdf * weight, 0.0f, sample.pdf);
     return lobe_mask;
 }
 
@@ -41,7 +44,13 @@ bsdf_eval
     float cosWi = fs->bsdf.IsDelta() ? 1.f : Abs(wiLocal.z);
     float pdf = fs->bsdf.IsDelta() ? 1.f : fs->bsdf.PDF(state.wo, wiLocal);
 
-    out_lobes[0] = AtBSDFLobeSample(f, 0.f, pdf);
+    AtRGB weight;
+    if (pdf == 0)
+        weight = 0;
+    else
+        weight = f * cosWi / pdf;
+
+    out_lobes[0] = AtBSDFLobeSample(weight, 0.f, pdf);
     return lobe_mask;
 }
 
