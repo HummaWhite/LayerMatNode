@@ -23,7 +23,7 @@ bsdf_sample
     if (sample.IsInvalid())
         return AI_BSDF_LOBE_MASK_NONE;
 
-    out_wi = AtVectorDv(ToWorld(state.nf, sample.w));
+    out_wi = AtVectorDv(ToWorld(state.nf, sample.wi));
     out_lobe_index = 0;
     out_lobes[0] = AtBSDFLobeSample(fs->bsdf.albedo, 0.0f, sample.pdf);
     return lobe_mask;

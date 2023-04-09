@@ -51,7 +51,7 @@ node_finish
 
 shader_evaluate
 {
-	BSDFWithState* top = GetNodeBSDFWithState(reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_top_node)));
+	BSDFWithState * top = GetNodeBSDFWithState(reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_top_node)));
 	BSDFWithState* bottom = GetNodeBSDFWithState(reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_bottom_node)));
 
 	LayeredBSDF layeredBSDF;
