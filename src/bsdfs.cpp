@@ -14,7 +14,7 @@ inline float SampleExponential(float u, float a) {
 }
 
 inline bool nonZero(AtRGB albedo) {
-	return albedo == AI_RGB_BLACK;
+	return albedo != AI_RGB_BLACK;
 }
 
 inline float maxComponentValue(AtRGB albedo) {
@@ -367,6 +367,20 @@ BSDFSample generatePath(
 	return BSDFSample(bSample.wi, throughput, pdf, AI_RAY_DIFFUSE_REFLECT);
 }
 
+struct myHash {
+	std::size_t operator()(Vec3f const& vec1, Vec3f const& vec2) const {
+		std::size_t seed = 3;
+		unsigned int x;
+		float y = 2.4565;
+		for (int i = 0; i < 6; i++)
+		{
+			memcpy(&x, i < 3 ? &vec1[i] : &vec2[i], sizeof(float));
+			seed ^= x + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+		}
+		return seed;
+	}
+};
+
 BSDFSample LayeredBSDF::Sample(BSDFState& s, bool adjoint) const
 {
 	Vec3f wo = s.wo;
@@ -399,7 +413,8 @@ BSDFSample LayeredBSDF::Sample(BSDFState& s, bool adjoint) const
 
 	// Declare _RNG_ for layered BSDF sampling
 	auto r = [&]() {
-		return std::min<float>(Sample1D(s.rng), OneMinusEpsilon);
+		RandomEngine rng(myHash()(bs->wi, s.wo));
+		return std::min<float>(Sample1D(rng), OneMinusEpsilon);
 	};
 
 	// Declare common variables for layered BSDF sampling

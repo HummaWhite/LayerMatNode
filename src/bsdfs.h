@@ -20,22 +20,22 @@ struct BSDFSample
 
 	bool IsInvalid() const
 	{
-		return type == AI_RAY_UNDEFINED;
+		return type & AI_RAY_UNDEFINED;
 	}
 
 	bool IsSpecular() const
 	{
-		return type == AI_RAY_ALL_SPECULAR;
+		return type & AI_RAY_ALL_SPECULAR;
 	}
 
 	bool IsReflection() const
 	{
-		return type == AI_RAY_ALL_REFLECT;
+		return type & AI_RAY_ALL_REFLECT;
 	}
 
 	bool IsTransmission() const
 	{
-		return type == AI_RAY_ALL_TRANSMIT;
+		return type & AI_RAY_ALL_TRANSMIT;
 	}
 
 	Vec3f wi;
