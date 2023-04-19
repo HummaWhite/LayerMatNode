@@ -21,7 +21,9 @@ node_parameters
 
 node_initialize
 {
-	AiNodeSetLocalData(node, new BSDFWithState);
+	auto bsdf = new BSDFWithState;
+	bsdf->bsdf = MetalBSDF();
+	AiNodeSetLocalData(node, bsdf);
 }
 
 node_update
