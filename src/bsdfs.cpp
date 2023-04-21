@@ -1,24 +1,16 @@
 #include "bsdfs.h"
 #include "microfacet.h"
-#include<cassert>
 
-static constexpr float OneMinusEpsilon = 0x1.fffffep-1;
-
-inline float AbsCosTheta(Vec3f w) {
-	return std::abs(w.z);
+float Transmittance(float z0, float z1, Vec3f w) {
+	return std::exp(-std::abs((z0 - z1) / w.z));
 }
 
-inline float SampleExponential(float u, float a) {
-	assert(a > 0.f);
+float Transmittance(float dz, Vec3f w) {
+	return std::exp(-std::abs(dz / w.z));
+}
+
+float SampleExponential(float a, float u) {
 	return -std::log(1 - u) / a;
-}
-
-inline bool nonZero(AtRGB albedo) {
-	return albedo != AI_RGB_BLACK;
-}
-
-inline float maxComponentValue(AtRGB albedo) {
-	return std::max(std::max(albedo.r, albedo.g), albedo.b);
 }
 
 bool Refract(Vec3f& wt, Vec3f n, Vec3f wi, float eta)
@@ -302,12 +294,155 @@ BSDFSample MetalBSDF::Sample(Vec3f wo, RandomEngine& rng) const
 	}
 }
 
-AtRGB LayeredBSDF::F(BSDFState& s, Vec3f wi, bool adjoint) const
+AtRGB LayeredBSDF::F(Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint) const
 {
 	return AtRGB(0.f);
+	if (!s.top && !s.bottom)
+		return AtRGB(0.f);
+	else if (!s.top)
+		return ::F(s.bottom->bsdf, wo, wi, s, adjoint);
+	else if (!s.bottom)
+		return ::F(s.top->bsdf, wo, wi, s, adjoint);
+
+	if (twoSided && wo.z < 0) {
+		wo = -wo;
+		wi = -wi;
+	}
+	bool entTop = twoSided || wo.z > 0;
+	BSDFWithState* ent = entTop ? s.top : s.bottom;
+	BSDFWithState* oth = entTop ? s.bottom : s.top;
+	BSDFWithState* ext = SameHemisphere(wo, wi) ? ent : oth;
+
+	float zEnt = entTop ? 0 : thickness;
+	float zExt = (ext == ent) ? zEnt : thickness - zEnt;
+
+	AtRGB f(0.f);
+
+	if (SameHemisphere(wo, wi))
+		f += ::F(ent->bsdf, wo, wi, s, adjoint) * float(nSamples);
+
+	for (int i = 0; i < nSamples; i++)
+	{
+		auto wos = ::Sample(ent->bsdf, wo, s, adjoint);
+
+		if (wos.IsInvalid() || IsSmall(wos.f) || wos.pdf < 1e-8f || wos.wi.z == 0 ||
+			!IsTransmitRay(wos.type))
+			continue;
+		
+		auto wis = ::Sample(ext->bsdf, wi, s, !adjoint);
+
+		if (wis.IsInvalid() || IsSmall(wis.f) || wis.pdf < 1e-8f || wis.wi.z == 0 ||
+			!IsTransmitRay(wis.type))
+			continue;
+
+		AtRGB throughput = wos.f * Abs(wos.wi.z) / wos.pdf;
+		float z = entTop ? 0 : thickness;
+		Vec3f w = wos.wi;
+
+		for (int depth = 1; depth <= maxDepth; depth++)
+		{
+			if (depth > 3)
+			{
+				float rr = AiMax(0.f, 1.f - Luminance(throughput));
+				if (Sample1D(s.rng) < rr)
+					break;
+				throughput /= (1.f - rr);
+			}
+
+			if (IsSmall(albedo))
+			{
+				z = (z == thickness) ? 0 : thickness;
+				throughput *= Transmittance(thickness, w);
+			}
+			else
+			{
+				float sigT = 1.f;
+				float dz = SampleExponential(sigT / Abs(w.z), Sample1D(s.rng));
+
+				if (dz == 0)
+					continue;
+				
+				float zNext = (w.z > 0) ? z - dz : z + dz;
+
+				if (zNext < thickness && zNext > 0)
+				{
+					float weight = 1.f;
+					if (!::IsDelta(ext->bsdf))
+						weight = PowerHeuristic(wis.pdf, HGPhasePDF(-w, -wis.wi, g));
+					
+					f += wis.f / wis.pdf * Transmittance(zNext, zExt, wis.wi) * albedo *
+						HGPhaseFunction(Dot(w, wis.wi), g) * weight * throughput;
+
+					auto phaseSample = HGPhaseSample(-w, g, Sample2D(s.rng));
+
+					if (phaseSample.pdf == 0 || phaseSample.wi.z == 0)
+						continue;
+					
+					throughput *= albedo * phaseSample.p / phaseSample.pdf;
+					w = phaseSample.wi;
+					z = zNext;
+
+					if (((z > zExt && w.z > 0) || (z < zExt && w.z < 0)) && !::IsDelta(ext->bsdf)) {
+						AtRGB fExt = ::F(ext->bsdf, -w, wi, s, adjoint);
+
+						if (!IsSmall(fExt))
+						{
+							float pExt = ::PDF(ext->bsdf, -w, wi, s, adjoint);
+							float weight = PowerHeuristic(phaseSample.pdf, pExt);
+							f += fExt / pExt * Transmittance(z, zExt, phaseSample.wi) * weight * throughput;
+						}
+					}
+					continue;
+				}
+				z = AiClamp(zNext, 0.f, thickness);
+			}
+
+			if (z == zExt)
+			{
+				auto es = ::Sample(ext->bsdf, -w, s, adjoint);
+				if (es.IsInvalid() || IsSmall(es.f) || es.pdf < 1e-8f || es.wi.z == 0)
+					break;
+				throughput *= es.f * Abs(es.wi.z) / es.pdf;
+				w = es.wi;
+			}
+			else
+			{
+				if (!::IsDelta(oth->bsdf))
+				{
+					float weight = 1.f;
+					if (!::IsDelta(ext->bsdf))
+						weight = PowerHeuristic(wis.pdf, ::PDF(oth->bsdf, -w, -wis.wi, s, adjoint));
+
+					f += ::F(oth->bsdf, -w, -wis.wi, s, adjoint) * Abs(wis.wi.z) *
+						Transmittance(thickness, wis.wi) * wis.f / wis.pdf * throughput * weight;
+				}
+
+				auto os = ::Sample(oth->bsdf, -w, s, adjoint);
+				if (os.IsInvalid() || IsSmall(os.f) || os.pdf < 1e-8f || os.wi.z == 0)
+					break;
+				
+				throughput *= os.f * Abs(os.wi.z) / os.pdf;
+
+				if (!::IsDelta(ext->bsdf))
+				{
+					AtRGB fExt = ::F(ext->bsdf, -w, wi, s, adjoint);
+					if (!IsSmall(fExt)) {
+						float weight = 1.f;
+						if (!::IsDelta(oth->bsdf))
+						{
+							float pExt = ::PDF(ext->bsdf, -w, wi, s, adjoint);
+							weight = PowerHeuristic(os.pdf, pExt);
+						}
+						f += fExt * Transmittance(thickness, os.wi) * weight * throughput;
+					}
+				}
+			}
+		}
+	}
+	return f / float(nSamples);
 }
 
-float LayeredBSDF::PDF(BSDFState& s, Vec3f wi, bool adjoint) const
+float LayeredBSDF::PDF(Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint) const
 {
 	return 1.f;
 }
@@ -343,8 +478,7 @@ BSDFSample generatePath(
 
 		BSDF* layerBSDF = interfaces[layer];
 
-		s.wo = wGiven;
-		auto bsdfSample = Sample(*layerBSDF, s, adjoint);
+		auto bsdfSample = ::Sample(*layerBSDF, wGiven, s, adjoint);
 
 		if (bsdfSample.IsInvalid()) {
 			return BSDFInvalidSample;
@@ -367,198 +501,162 @@ BSDFSample generatePath(
 	return BSDFSample(bSample.wi, throughput, pdf, AI_RAY_DIFFUSE_REFLECT);
 }
 
-struct myHash {
-	std::size_t operator()(Vec3f const& vec1, Vec3f const& vec2) const {
-		std::size_t seed = 3;
-		unsigned int x;
-		float y = 2.4565;
-		for (int i = 0; i < 6; i++)
-		{
-			memcpy(&x, i < 3 ? &vec1[i] : &vec2[i], sizeof(float));
-			seed ^= x + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-		}
-		return seed;
-	}
-};
-
-BSDFSample LayeredBSDF::Sample(BSDFState& s, bool adjoint) const
+BSDFSample LayeredBSDF::Sample(Vec3f wo, BSDFState& s, bool adjoint) const
 {
-	Vec3f wo = s.wo;
-	float uc = Sample1D(s.rng);
-	Vec2f u = Sample2D(s.rng);
+	if (!s.top && !s.bottom)
+		return BSDFInvalidSample;
+	else if (!s.top)
+		return ::Sample(s.bottom->bsdf, wo, s, adjoint);
+	else if (!s.bottom)
+		return ::Sample(s.top->bsdf, wo, s, adjoint);
 
-	//BxDFReflTransFlags sampleFlags = BxDFReflTransFlags::All;
-	//CHECK(sampleFlags == BxDFReflTransFlags::All);  // for now
-	// Set _wo_ for layered BSDF sampling
-	bool flipWi = false;
-	if (twoSided&& wo.z < 0) {
-		wo = -wo;
-		flipWi = true;
-	}
+	bool entTop = wo.z > 0;
+	BSDFWithState* ent = entTop ? s.top : s.bottom;
+	BSDFWithState* oth = entTop ? s.bottom : s.top;
 
-	// Sample BSDF at entrance interface to get initial direction _w_
-	bool enteredTop = twoSided || wo.z > 0;
-	std::optional<BSDFSample> bs =
-		enteredTop ? ::Sample(s.top->bsdf, s, adjoint) : ::Sample(s.bottom->bsdf, s, adjoint);
-	if (!bs || !nonZero(bs->f) || bs->pdf == 0 || bs->wi.z == 0)
-		return {};
-	if (bs->IsReflection()) {
-		if (flipWi)
-			bs->wi = -bs->wi;
-		//bs->pdfIsProportional = true;
-		return bs.value();
-	}
-	Vec3f w = bs->wi;
-	bool specularPath = bs->IsSpecular();
+	auto ins = ::Sample(ent->bsdf, wo, s, adjoint);
 
-	// Declare _RNG_ for layered BSDF sampling
-	auto r = [&]() {
-		RandomEngine rng(myHash()(bs->wi, s.wo));
-		return std::min<float>(Sample1D(rng), OneMinusEpsilon);
-	};
+	if (ins.IsInvalid() || ins.pdf < 1e-8f || ins.wi.z == 0 || IsSmall(ins.f))
+		return BSDFInvalidSample;
 
-	// Declare common variables for layered BSDF sampling
-	AtRGB f = bs->f * AbsCosTheta(bs->wi);
-	float pdf = bs->pdf;
-	float z = enteredTop ? thickness : 0;
+	if (SameHemisphere(wo, ins.wi))
+		return ins;
 
-	for (int depth = 0; depth < maxDepth; ++depth) {
-		// Follow random walk through layers to sample layered BSDF
-		// Possibly terminate layered BSDF sampling with Russian Roulette
-		float rrBeta = maxComponentValue(f) / pdf;
-		if (depth > 3 && rrBeta < 0.25f) {
-			float q = std::max<float>(0, 1 - rrBeta);
-			if (r() < q)
-				return {};
-			pdf *= 1 - q;
+	AtRGB f = ins.f * (IsDeltaRay(ins.type) ? 1.f : Abs(ins.wi.z));
+	float pdf = ins.pdf;
+	float z = entTop ? 0.f : thickness;
+	Vec3f w = ins.wi;
+	bool delta = IsDeltaRay(ins.type);
+
+	for (int depth = 1; depth <= maxDepth; depth++)
+	{
+		if (depth > 3)
+		{
+			float rr = AiMax(0.f, 1.f - Luminance(f) / pdf);
+			if (Sample1D(s.rng) < rr)
+				return BSDFInvalidSample;
+			pdf *= 1.f - rr;
 		}
+
 		if (w.z == 0)
-			return {};
+			return BSDFInvalidSample;
 
-		if (albedo.r != 0 || albedo.g != 0 || albedo.b != 0) {
-			// Sample potential scattering event in layered medium
-			float sigma_t = 1;
-			float dz = SampleExponential(r(), sigma_t / AbsCosTheta(w));
-			float zp = w.z > 0 ? (z + dz) : (z - dz);
-			if (zp == z)
-				return {};
-			if (0 < zp && zp < thickness) {
-				// Update path state for valid scattering event between interfaces
-				std::optional<PhaseSample> ps = HGPhaseSample(-w, g, Vec2f(r(), r()));
-				if (!ps || ps->pdf == 0 || ps->wi.z == 0)
-					return {};
-				f *= albedo * ps->p;
-				pdf *= ps->pdf;
-				specularPath = false;
-				w = ps->wi;
-				z = zp;
+		if (IsSmall(albedo))
+		{
+			z = (z == thickness) ? 0 : thickness;
+			f *= Transmittance(thickness, w);
+		}
+		else
+		{
+			float sigT = 1.f;
+			float dz = SampleExponential(sigT / Abs(w.z), Sample1D(s.rng));
 
+			if (dz == 0)
+				continue;
+
+			float zNext = (w.z > 0) ? z - dz : z + dz;
+
+			if (zNext < thickness && zNext > 0)
+			{
+				auto phaseSample = HGPhaseSample(-w, g, Sample2D(s.rng));
+
+				if (phaseSample.pdf == 0 || phaseSample.wi.z == 0)
+					return BSDFInvalidSample;
+
+				f *= albedo * phaseSample.p;
+				pdf *= phaseSample.pdf;
+				w = phaseSample.wi;
+				z = zNext;
+				delta = false;
 				continue;
 			}
-			z = std::clamp(zp, 0.f, thickness);
-			if (z == 0)
-				assert(w.z < 0.f);
+			z = AiClamp(zNext, 0.f, thickness);
+		}
+		BSDFWithState* interf = (z == 0) ? s.top : s.bottom;
+		auto bsdfSample = ::Sample(interf->bsdf, -w, s, adjoint);
+
+		if (bsdfSample.IsInvalid() || IsSmall(bsdfSample.f) || bsdfSample.pdf < 1e-8f ||
+			bsdfSample.wi.z == 0)
+			return BSDFInvalidSample;
+
+		f *= bsdfSample.f;
+		pdf *= bsdfSample.pdf;
+		delta &= IsDeltaRay(bsdfSample.type);
+		w = bsdfSample.wi;
+
+		if (IsTransmitRay(bsdfSample.type))
+		{
+			int type;
+			if (delta)
+				type = SameHemisphere(wo, w) ? AI_RAY_SPECULAR_REFLECT : AI_RAY_SPECULAR_TRANSMIT;
 			else
-				assert(w.z > 0.f);
-		}
-		else {
-			// Advance to the other layer interface
-			z = (z == thickness) ? 0 : thickness;
-			f *= Tr(thickness, w);
-		}
-		// Initialize _interface_ for current interface surface
-#ifdef interface  // That's enough out of you, Windows.
-#undef interface
-#endif
-		BSDF* interface;
-		if (z == 0)
-			interface = &s.bottom->bsdf;
-		else
-			interface = &s.top->bsdf;
+				type = SameHemisphere(wo, w) ? AI_RAY_DIFFUSE_REFLECT : AI_RAY_DIFFUSE_TRANSMIT;
 
-		// Sample interface BSDF to determine new path direction
-		float uc = r();
-		Vec2f u(r(), r());
-		std::optional<BSDFSample> bs = ::Sample(*interface, s, adjoint);
-		if (!bs || !nonZero(bs->f) || bs->pdf == 0 || bs->wi.z == 0)
-			return {};
-		f *= bs->f;
-		pdf *= bs->pdf;
-		specularPath &= bs->IsSpecular();
-		w = bs->wi;
-
-		// Return _BSDFSample_ if path has left the layers
-		if (bs->IsTransmission()) {
-			int flags = SameHemisphere(wo, w) ? AI_RAY_ALL_REFLECT
-				: AI_RAY_ALL_TRANSMIT;
-			flags |= specularPath ? AI_RAY_ALL_SPECULAR : AI_RAY_ALL_DIFFUSE;//BxDFFlags::Glossy
-			if (flipWi)
-				w = -w;
-			return BSDFSample(w, f, pdf, flags, true);
+			return BSDFSample(w, f, pdf, type);
 		}
 
-		// Scale _f_ by cosine term after scattering at the interface
-		f *= AbsCosTheta(bs->wi);
+		if (!IsDeltaRay(bsdfSample.type))
+			f *= Abs(bsdfSample.wi.z);
 	}
-	return {};
+	return BSDFInvalidSample;
 }
 
-AtRGB F(const BSDF& bsdf, BSDFState& s, Vec3f wi, bool adjoint)
+AtRGB F(const BSDF& bsdf, Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint)
 {
 	if (std::get_if<FakeBSDF>(&bsdf)) {
-		return std::get_if<FakeBSDF>(&bsdf)->F(s.wo, wi);
+		return std::get_if<FakeBSDF>(&bsdf)->F(wo, wi);
 	}
 	else if (std::get_if<LambertBSDF>(&bsdf)) {
-		return std::get_if<LambertBSDF>(&bsdf)->F(s.wo, wi);
+		return std::get_if<LambertBSDF>(&bsdf)->F(wo, wi);
 	}
 	else if (std::get_if<DielectricBSDF>(&bsdf)) {
-		return std::get_if<DielectricBSDF>(&bsdf)->F(s.wo, wi, adjoint);
+		return std::get_if<DielectricBSDF>(&bsdf)->F(wo, wi, adjoint);
 	}
 	else if (std::get_if<MetalBSDF>(&bsdf)) {
-		return std::get_if<MetalBSDF>(&bsdf)->F(s.wo, wi);
+		return std::get_if<MetalBSDF>(&bsdf)->F(wo, wi);
 	}
 	else if (std::get_if<LayeredBSDF>(&bsdf)) {
-		return std::get_if<LayeredBSDF>(&bsdf)->F(s, wi, adjoint);
+		return std::get_if<LayeredBSDF>(&bsdf)->F(wo, wi, s, adjoint);
 	}
 	return AtRGB(0.f);
 }
 
-float PDF(const BSDF& bsdf, BSDFState& s, Vec3f wi, bool adjoint)
+float PDF(const BSDF& bsdf, Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint)
 {
 	if (std::get_if<FakeBSDF>(&bsdf)) {
-		return std::get_if<FakeBSDF>(&bsdf)->PDF(s.wo, wi);
+		return std::get_if<FakeBSDF>(&bsdf)->PDF(wo, wi);
 	}
 	else if (std::get_if<LambertBSDF>(&bsdf)) {
-		return std::get_if<LambertBSDF>(&bsdf)->PDF(s.wo, wi);
+		return std::get_if<LambertBSDF>(&bsdf)->PDF(wo, wi);
 	}
 	else if (std::get_if<DielectricBSDF>(&bsdf)) {
-		return std::get_if<DielectricBSDF>(&bsdf)->PDF(s.wo, wi, adjoint);
+		return std::get_if<DielectricBSDF>(&bsdf)->PDF(wo, wi, adjoint);
 	}
 	else if (std::get_if<MetalBSDF>(&bsdf)) {
-		return std::get_if<MetalBSDF>(&bsdf)->PDF(s.wo, wi);
+		return std::get_if<MetalBSDF>(&bsdf)->PDF(wo, wi);
 	}
 	else if (std::get_if<LayeredBSDF>(&bsdf)) {
-		return std::get_if<LayeredBSDF>(&bsdf)->PDF(s, wi, adjoint);
+		return std::get_if<LayeredBSDF>(&bsdf)->PDF(wo, wi, s, adjoint);
 	}
 	return 0.f;
 }
 
-BSDFSample Sample(const BSDF& bsdf, BSDFState& s, bool adjoint)
+BSDFSample Sample(const BSDF& bsdf, Vec3f wo, BSDFState& s, bool adjoint)
 {
 	if (std::get_if<FakeBSDF>(&bsdf)) {
-		return std::get_if<FakeBSDF>(&bsdf)->Sample(s.wo);
+		return std::get_if<FakeBSDF>(&bsdf)->Sample(wo);
 	}
 	else if (std::get_if<LambertBSDF>(&bsdf)) {
-		return std::get_if<LambertBSDF>(&bsdf)->Sample(s.wo, s.rng);
+		return std::get_if<LambertBSDF>(&bsdf)->Sample(wo, s.rng);
 	}
 	else if (std::get_if<DielectricBSDF>(&bsdf)) {
-		return std::get_if<DielectricBSDF>(&bsdf)->Sample(s.wo, adjoint, s.rng);
+		return std::get_if<DielectricBSDF>(&bsdf)->Sample(wo, adjoint, s.rng);
 	}
 	else if (std::get_if<MetalBSDF>(&bsdf)) {
-		return std::get_if<MetalBSDF>(&bsdf)->Sample(s.wo, s.rng);
+		return std::get_if<MetalBSDF>(&bsdf)->Sample(wo, s.rng);
 	}
 	else if (std::get_if<LayeredBSDF>(&bsdf)) {
-		return std::get_if<LayeredBSDF>(&bsdf)->Sample(s, adjoint);
+		return std::get_if<LayeredBSDF>(&bsdf)->Sample(wo, s, adjoint);
 	}
 	return BSDFInvalidSample;
 }

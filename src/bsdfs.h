@@ -117,6 +117,7 @@ struct DielectricBSDF
 	AtRGB F(Vec3f wo, Vec3f wi, bool adjoint) const;
 	float PDF(Vec3f wo, Vec3f wi, bool adjoint) const;
 	BSDFSample Sample(Vec3f wo, bool adjoint, RandomEngine& rng) const;
+
 	bool IsDelta() const { return ApproxDelta(); }
 	bool HasTransmit() const { return true; }
 	bool ApproxDelta() const { return alpha < 1e-4f; }
@@ -140,24 +141,23 @@ struct MetalBSDF
 	float alpha;
 };
 
+struct BSDFWithState;
+
 struct LayeredBSDF
 {
-	AtRGB F(BSDFState& s, Vec3f wi, bool adjoint) const;
-	float PDF(BSDFState& s, Vec3f wi, bool adjoint) const;
-	BSDFSample Sample(BSDFState& s, bool adjoint) const;
+	AtRGB F(Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint) const;
+	float PDF(Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint) const;
+	BSDFSample Sample(Vec3f wo, BSDFState& s, bool adjoint) const;
+
 	bool IsDelta() const { return false; }
 	bool HasTransmit() const { return true; }
 
 	float thickness;
 	float g;
 	AtRGB albedo;
-	bool twoSided;
 	int maxDepth;
-	inline float Tr(float dz, Vec3f w)const {
-		if (std::abs(dz) <= std::numeric_limits<float>::min())
-			return 1;
-		return exp(-std::abs(dz / w.z));
-	}
+	int nSamples;
+	bool twoSided;
 };
 
 using BSDF = std::variant<FakeBSDF, LambertBSDF, DielectricBSDF, MetalBSDF, LayeredBSDF>;
@@ -187,9 +187,10 @@ struct WithState
 
 // TODO:
 // replace with std::visit if applicable
-AtRGB F(const BSDF& bsdf, BSDFState& s, Vec3f wi, bool adjoint);
-float PDF(const BSDF& bsdf, BSDFState& s, Vec3f wi, bool adjoint);
-BSDFSample Sample(const BSDF& bsdf, BSDFState& s, bool adjoint);
+AtRGB F(const BSDF& bsdf, Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint);
+float PDF(const BSDF& bsdf, Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint);
+BSDFSample Sample(const BSDF& bsdf, Vec3f wo, BSDFState& s, bool adjoint);
+
 bool IsDelta(const BSDF& bsdf);
 bool HasTransmit(const BSDF& bsdf);
 

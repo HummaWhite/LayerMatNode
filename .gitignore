@@ -6,3 +6,4 @@ build/*
 plugin/Debug
 *.dll
 plugin/LayerMatNode.dll
+plugin/LayerMatNode.dll

@@ -147,6 +147,11 @@ inline bool IsSmall(Vec3f v)
 	return AiV3IsSmall(v);
 }
 
+inline bool IsSmall(AtRGB v)
+{
+	return AiV3IsSmall(Vec3f(v.r, v.g, v.b));
+}
+
 inline AtRGB Max(AtRGB a, AtRGB b)
 {
 	return AtRGB(std::max(a.r, b.r), std::max(a.g, b.g), std::max(a.b, b.b));
@@ -188,6 +193,17 @@ T Min(const T& a, const T& b)
 inline int FloatBitsToInt(float x)
 {
 	return *reinterpret_cast<int*>(&x);
+}
+
+inline float Luminance(AtRGB c)
+{
+	return c.r * 0.299f + c.g * 0.587f + c.b * 0.114f;
+}
+
+inline float PowerHeuristic(float f, float g)
+{
+	float f2 = f * f, g2 = g * g;
+	return f2 / (f2 + g2);
 }
 
 struct Vec2c

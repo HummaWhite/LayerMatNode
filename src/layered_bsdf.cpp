@@ -18,7 +18,7 @@ bsdf_sample
 	auto& state = fs->state;
 
 	state.rng.seed(FloatBitsToInt(rnd.x) ^ state.threadId);
-	BSDFSample sample = fs->bsdf.Sample(state, false);
+	BSDFSample sample = fs->bsdf.Sample(state.wo, state, false);
 
 	if (sample.IsInvalid())
 		return AI_BSDF_LOBE_MASK_NONE;
@@ -37,9 +37,9 @@ bsdf_eval
 	auto& state = fs->state;
 	Vec3f wiLocal = ToLocal(state.nf, wi);
 
-	AtRGB f = fs->bsdf.F(state, wiLocal, false);
+	AtRGB f = fs->bsdf.F(state.wo, wiLocal, state, false);
 	float cosWi = fs->bsdf.IsDelta() ? 1.f : Abs(wiLocal.z);
-	float pdf = fs->bsdf.IsDelta() ? 1.f : fs->bsdf.PDF(state, wiLocal, false);
+	float pdf = fs->bsdf.IsDelta() ? 1.f : fs->bsdf.PDF(state.wo, wiLocal, state, false);
 
 	out_lobes[0] = AtBSDFLobeSample(f * cosWi / pdf, 0.f, pdf);
 	return lobe_mask;
