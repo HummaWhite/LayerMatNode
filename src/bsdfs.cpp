@@ -445,6 +445,82 @@ AtRGB LayeredBSDF::F(Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint) const
 float LayeredBSDF::PDF(Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint) const
 {
 	return 1.f;
+	if (!s.top && !s.bottom)
+		return 0;
+	else if (!s.top)
+		return ::PDF(s.bottom->bsdf, wo, wi, s, adjoint);
+	else if (!s.bottom)
+		return ::PDF(s.top->bsdf, wo, wi, s, adjoint);
+
+	bool entTop = twoSided || wo.z > 0;
+	float pdfSum = 0.f;
+
+	if (SameHemisphere(wo, wi))
+		pdfSum += (entTop ? ::PDF(s.top->bsdf, wo, wi, s, adjoint) : ::PDF(s.bottom->bsdf, wo, wi, s, adjoint)) * nSamples;
+
+	for (int i = 0; i < nSamples; i++)
+	{
+		if (SameHemisphere(wo, wi))
+		{
+			BSDFWithState* tBSDF = entTop ? s.top : s.bottom;
+			BSDFWithState* rBSDF = entTop ? s.bottom : s.top;
+
+			auto wos = ::Sample(tBSDF->bsdf, wo, s, adjoint);
+			auto wis = ::Sample(tBSDF->bsdf, wo, s, !adjoint);
+
+			if (!wos.IsInvalid() && !IsSmall(wos.f) && wos.pdf > 1e-8f && IsTransmitRay(wos.type) &&
+				!wis.IsInvalid() && !IsSmall(wis.f) && wis.pdf > 1e-8f && IsTransmitRay(wis.type))
+			{
+				if (::IsDelta(tBSDF->bsdf))
+					pdfSum += ::PDF(rBSDF->bsdf, -wos.wi, wis.wi, s, adjoint);
+				else
+				{
+					auto rs = ::Sample(rBSDF->bsdf, -wos.wi, s, adjoint);
+					if (!rs.IsInvalid() && !IsSmall(rs.f) && rs.pdf > 1e-8f)
+					{
+						if (::IsDelta(rBSDF->bsdf)) {
+							pdfSum += ::PDF(tBSDF->bsdf, -rs.wi, wi, s, adjoint);
+						}
+						else {
+							float rPdf = ::PDF(rBSDF->bsdf, -wos.wi, -wis.wi, s, adjoint);
+							pdfSum += rPdf * PowerHeuristic(wis.pdf, rPdf);
+
+							float tPdf = ::PDF(tBSDF->bsdf, -rs.wi, wi, s, adjoint);
+							pdfSum += tPdf * PowerHeuristic(rs.pdf, tPdf);
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			BSDFWithState* oBSDF = entTop ? s.top : s.bottom;
+			BSDFWithState* iBSDF = entTop ? s.bottom : s.top;
+
+			auto wos = ::Sample(oBSDF->bsdf, wo, s, adjoint);
+
+			if (wos.IsInvalid() || IsSmall(wos.f) || wos.pdf < 1e-8f || wos.wi.z == 0 ||
+				!IsTransmitRay(wos.type))
+				continue;
+
+			auto wis = ::Sample(iBSDF->bsdf, wi, s, adjoint);
+
+			if (wis.IsInvalid() || IsSmall(wis.f) || wis.pdf < 1e-8f || wis.wi.z == 0 ||
+				!IsTransmitRay(wis.type))
+				continue;
+
+			if (::IsDelta(oBSDF->bsdf))
+				pdfSum += ::PDF(iBSDF->bsdf, -wos.wi, wi, s, adjoint);
+			else if (::IsDelta(iBSDF->bsdf))
+				pdfSum += ::PDF(oBSDF->bsdf, wo, -wis.wi, s, adjoint);
+			else
+			{
+				pdfSum += ::PDF(iBSDF->bsdf, -wos.wi, wi, s, adjoint) * .5f;
+				pdfSum += ::PDF(oBSDF->bsdf, wo, -wis.wi, s, adjoint) * .5f;
+			}
+		}
+	}
+	return AiLerp(.25f * AI_ONEOVERPI, pdfSum / nSamples, .9f);
 }
 
 struct PathVertex {
