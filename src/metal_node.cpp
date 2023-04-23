@@ -8,6 +8,7 @@ enum MetalNodeParams
 	p_ior,
 	p_k,
 	p_roughness,
+	p_normal_camera,
 };
 
 node_parameters
@@ -17,6 +18,7 @@ node_parameters
 	AiParameterFlt("ior", 1.5f);
 	AiParameterFlt("k", .1f);
 	AiParameterFlt("roughness", .2f);
+	AiParameterVec("normal_camera", 0.0f, 0.0f, 0.0f);
 }
 
 node_initialize
@@ -42,6 +44,7 @@ shader_evaluate
 	metalBSDF.ior = AiShaderEvalParamFlt(p_ior);
 	metalBSDF.k = AiShaderEvalParamFlt(p_k);
 	metalBSDF.alpha = AiSqr(AiShaderEvalParamFlt(p_roughness));
+	metalBSDF.normalCamera = AiShaderEvalParamVec(p_normal_camera);
 
 	auto fs = GetNodeLocalData<BSDFWithState>(node);
 	//fs->state.SetDirectionsAndRng(sg, false);

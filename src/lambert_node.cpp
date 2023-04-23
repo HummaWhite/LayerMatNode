@@ -5,12 +5,14 @@ AI_SHADER_NODE_EXPORT_METHODS(LambertNodeMtd);
 enum LambertNodeParams
 {
 	p_albedo = 1,
+	p_normal_camera,
 };
 
 node_parameters
 {
 	AiParameterStr(NodeParamTypeName, LambertNodeName);
 	AiParameterRGB("albedo", .8f, .8f, .8f);
+	AiParameterVec("normal_camera", 0.0f, 0.0f, 0.0f);
 }
 
 node_initialize
@@ -33,7 +35,7 @@ shader_evaluate
 {
 	LambertBSDF lambertBSDF;
 	lambertBSDF.albedo = AiShaderEvalParamRGB(p_albedo);
-
+	lambertBSDF.normalCamera = AiShaderEvalParamVec(p_normal_camera);
 	auto fs = GetNodeLocalData<BSDFWithState>(node);
 	fs->state.SetDirectionsAndRng(sg, false);
 	fs->bsdf = lambertBSDF;
