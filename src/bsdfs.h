@@ -92,7 +92,11 @@ struct BSDFState
 	BSDFWithState* bottom = nullptr;
 };
 
-struct FakeBSDF
+struct BaseBSDF {
+	AtVector normalCamera;
+};
+
+struct FakeBSDF : public BaseBSDF
 {
 	AtRGB F(Vec3f wo, Vec3f wi) const { return AtRGB(0.f); }
 	float PDF(Vec3f wo, Vec3f wi) const { return 0.f; }
@@ -101,7 +105,7 @@ struct FakeBSDF
 	bool HasTransmit() const { return true; }
 };
 
-struct LambertBSDF
+struct LambertBSDF : public BaseBSDF
 {
 	AtRGB F(Vec3f wo, Vec3f wi) const { return albedo * AI_ONEOVERPI; }
 	float PDF(Vec3f wo, Vec3f wi) const { return Abs(wi.z) * AI_ONEOVERPI; }
@@ -112,7 +116,7 @@ struct LambertBSDF
 	AtRGB albedo = AtRGB(.8f);
 };
 
-struct DielectricBSDF
+struct DielectricBSDF : public BaseBSDF
 {
 	AtRGB F(Vec3f wo, Vec3f wi, bool adjoint) const;
 	float PDF(Vec3f wo, Vec3f wi, bool adjoint) const;
@@ -126,7 +130,7 @@ struct DielectricBSDF
 	float alpha;
 };
 
-struct MetalBSDF
+struct MetalBSDF : public BaseBSDF
 {
 	AtRGB F(Vec3f wo, Vec3f wi) const;
 	float PDF(Vec3f wo, Vec3f wi) const;
@@ -143,7 +147,7 @@ struct MetalBSDF
 
 struct BSDFWithState;
 
-struct LayeredBSDF
+struct LayeredBSDF : public BaseBSDF
 {
 	AtRGB F(Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint) const;
 	float PDF(Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint) const;
