@@ -20,7 +20,7 @@ struct BSDFSample
 
 	bool IsInvalid() const
 	{
-		return type & AI_RAY_UNDEFINED;
+		return type & AI_RAY_UNDEFINED || pdf < 1e-8f || isnan(pdf) || ::IsInvalid(f) || wi.z == 0;
 	}
 
 	bool IsSpecular() const
@@ -60,6 +60,7 @@ struct BSDFState
 
 	void SetDirections(const AtShaderGlobals* sg, bool keepNormalFacing)
 	{
+		n = sg->N;
 		if (!keepNormalFacing)
 			nf = sg->Nf;
 		else
@@ -73,7 +74,7 @@ struct BSDFState
 	void SetDirectionsAndRng(const AtShaderGlobals* sg, bool keepNormalFacing)
 	{
 		SetDirections(sg, keepNormalFacing);
-		threadId = sg->si << 16 | sg->tid;
+		threadId = FloatBitsToInt(sg->px) + FloatBitsToInt(sg->py);
 	}
 	Vec3f n;
 	// front-facing mapped smooth normal
@@ -126,8 +127,8 @@ struct DielectricBSDF : public BaseBSDF
 	bool HasTransmit() const { return true; }
 	bool ApproxDelta() const { return alpha < 1e-4f; }
 
-	float ior;
-	float alpha;
+	float ior = 1.5f;
+	float alpha = 0.f;
 };
 
 struct MetalBSDF : public BaseBSDF
@@ -139,10 +140,10 @@ struct MetalBSDF : public BaseBSDF
 	bool HasTransmit() const { return true; }
 	bool ApproxDelta() const { return alpha < 1e-4f; }
 
-	AtRGB albedo;
-	float ior;
-	float k;
-	float alpha;
+	AtRGB albedo = AtRGB(.8f);
+	float ior = .4f;
+	float k = .5f;
+	float alpha = .04f;
 };
 
 struct BSDFWithState;
@@ -156,12 +157,12 @@ struct LayeredBSDF : public BaseBSDF
 	bool IsDelta() const { return false; }
 	bool HasTransmit() const { return true; }
 
-	float thickness;
-	float g;
-	AtRGB albedo;
-	int maxDepth;
-	int nSamples;
-	bool twoSided;
+	float thickness = .1f;
+	float g = .4f;
+	AtRGB albedo = AtRGB(.8f);
+	int maxDepth = 20;
+	int nSamples = 64;
+	bool twoSided = false;
 };
 
 using BSDF = std::variant<FakeBSDF, LambertBSDF, DielectricBSDF, MetalBSDF, LayeredBSDF>;

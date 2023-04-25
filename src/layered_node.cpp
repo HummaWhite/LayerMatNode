@@ -30,9 +30,9 @@ node_parameters
 	AiParameterStr(NodeParamTypeName, LayeredNodeName);
 	AiParameterNode("top_node", nullptr);
 	AiParameterNode("bottom_node", nullptr);
-	AiParameterFlt("thickness", 1.f);
-	AiParameterFlt("g", 0.f);
-	AiParameterRGB("albedo", 1.f, 1.f, 1.f);
+	AiParameterFlt("thickness", .1f);
+	AiParameterFlt("g", .4f);
+	AiParameterRGB("albedo", .8f, .8f, .8f);
 }
 
 node_initialize
@@ -53,7 +53,7 @@ node_finish
 
 shader_evaluate
 {
-	BSDFWithState * top = GetNodeBSDFWithState(reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_top_node)));
+	BSDFWithState* top = GetNodeBSDFWithState(reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_top_node)));
 	BSDFWithState* bottom = GetNodeBSDFWithState(reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_bottom_node)));
 
 	LayeredBSDF layeredBSDF;

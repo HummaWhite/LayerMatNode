@@ -10,6 +10,7 @@ bsdf_init
 	static const AtBSDFLobeInfo lobe_info[] = { {AI_RAY_ALL, 0, AtString()} };
 
 	AiBSDFInitLobes(bsdf, lobe_info, 1);
+
 	if (AiV3IsSmall(fs->bsdf.normalCamera))
 		AiBSDFInitNormal(bsdf, fs->state.n, false);
 	else
@@ -27,13 +28,13 @@ bsdf_sample
 	if (sample.IsInvalid())
 		return AI_BSDF_LOBE_MASK_NONE;
 
-	float cosWi = IsDeltaRay(sample.type) ? 1.f : Abs(sample.wi.z);
+	float cosWi = IsDeltaRay(sample.type) ? 1.f : Max(sample.wi.z, 0.f);
 
-	float weight = AiBSDFBumpShadow(state.ns, state.n, ToWorld(state.nf, sample.wi));
+	float weight = AiBSDFBumpShadow(state.ns, state.nf, ToWorld(state.nf, sample.wi));
 
 	out_wi = AtVectorDv(ToWorld(state.nf, sample.wi));
 	out_lobe_index = 0;
-	out_lobes[0] = AtBSDFLobeSample(sample.f * cosWi / sample.pdf * weight, 0.0f, sample.pdf);
+	out_lobes[0] = AtBSDFLobeSample(sample.f * cosWi / sample.pdf, 0.0f, sample.pdf);
 	return lobe_mask;
 }
 
@@ -44,16 +45,19 @@ bsdf_eval
 	Vec3f wiLocal = ToLocal(state.nf, wi);
 
 	AtRGB f = fs->bsdf.F(state.wo, wiLocal);
-	float cosWi = fs->bsdf.IsDelta() ? 1.f : Abs(wiLocal.z);
+	float cosWi = fs->bsdf.IsDelta() ? 1.f : Max(wiLocal.z, 0.f);
 	float pdf = fs->bsdf.IsDelta() ? 1.f : fs->bsdf.PDF(state.wo, wiLocal);
 
 	AtRGB weight;
-	if (pdf == 0)
+	if (pdf < 1e-6f || isnan(pdf) || IsInvalid(f))
+	{
 		weight = 0;
+		pdf = 1.;
+	}
 	else
 		weight = f * cosWi / pdf;
 
-	out_lobes[0] = AtBSDFLobeSample(weight, 0.f, pdf);
+	out_lobes[0] = AtBSDFLobeSample(f * cosWi / pdf, 0.f, pdf);
 	return lobe_mask;
 }
 

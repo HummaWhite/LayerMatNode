@@ -77,14 +77,14 @@ inline Vec3f ToLocal(Vec3f n, Vec3f w)
 	m[3][0] = 0.0f, m[3][1] = 0.0f, m[3][2] = 0.0f, m[3][3] = 1.0f;
 
 	m = AiM4Invert(m);
-	return AiM4VectorByMatrixMult(m, w);
+	return AiV3Normalize(AiM4VectorByMatrixMult(m, w));
 }
 
 inline Vec3f ToWorld(Vec3f n, Vec3f w)
 {
 	Vec3f t, b;
 	AiV3BuildLocalFrame(t, b, n);
-	return t * w.x + b * w.y + n * w.z;
+	return AiV3Normalize(t * w.x + b * w.y + n * w.z);
 }
 
 inline bool IsDeltaRay(int type)
@@ -204,6 +204,11 @@ inline float PowerHeuristic(float f, float g)
 {
 	float f2 = f * f, g2 = g * g;
 	return f2 / (f2 + g2);
+}
+
+inline bool IsInvalid(AtRGB c)
+{
+	return (c.r < 0 || c.g < 0 || c.b < 0 || isnan(c.r) || isnan(c.g) || isnan(c.b));
 }
 
 struct Vec2c

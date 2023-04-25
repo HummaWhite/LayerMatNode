@@ -335,7 +335,7 @@ AtRGB LayeredBSDF::F(Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint) const
 			!IsTransmitRay(wis.type))
 			continue;
 
-		AtRGB throughput = wos.f * Abs(wos.wi.z) / wos.pdf;
+		AtRGB throughput = wos.f / wos.pdf * (::IsDeltaRay(wos.type) ? 1.f : Abs(wos.wi.z));
 		float z = entTop ? 0 : thickness;
 		Vec3f w = wos.wi;
 
@@ -402,7 +402,7 @@ AtRGB LayeredBSDF::F(Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint) const
 				auto es = ::Sample(ext->bsdf, -w, s, adjoint);
 				if (es.IsInvalid() || IsSmall(es.f) || es.pdf < 1e-8f || es.wi.z == 0)
 					break;
-				throughput *= es.f * Abs(es.wi.z) / es.pdf;
+				throughput *= es.f / es.pdf * (::IsDeltaRay(es.type) ? 1.f : Abs(es.wi.z));
 				w = es.wi;
 			}
 			else
@@ -421,7 +421,7 @@ AtRGB LayeredBSDF::F(Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint) const
 				if (os.IsInvalid() || IsSmall(os.f) || os.pdf < 1e-8f || os.wi.z == 0)
 					break;
 				
-				throughput *= os.f * Abs(os.wi.z) / os.pdf;
+				throughput *= os.f / os.pdf * (::IsDeltaRay(os.type) ? 1.f : Abs(os.wi.z));
 
 				if (!::IsDelta(ext->bsdf))
 				{
