@@ -1,15 +1,19 @@
 polySphere -r 1 -sx 20 -sy 20 -ax 0 1 0 -cuv 2 -ch 1;
+polyPlane -w 50 -h 50 -sx 10 -sy 10 -ax 0 0 1 -cuv 2 -ch 1;
+setAttr "pPlane1.translateZ" -3;
+
 shadingNode -asShader aiLambertNode;
+shadingNode -asShader aiMetalNode;
 shadingNode -asShader aiLayerMatNode;
-sets -renderable true -noSurfaceShader true -empty -name aiLambertNode1SG;
+shadingNode -asShader aiLayerMatNode;
+shadingNode -asShader aiDielectricNode;
 sets -renderable true -noSurfaceShader true -empty -name aiLayerMatNode1SG;
-defaultNavigation -connectToExisting -source aiLambertNode1 -destination aiLambertNode1SG;
-defaultNavigation -source aiLayerMatNode1 -destination |pSphere1|pSphereShape1.instObjGroups[0] -connectToExisting;
-connectAttr -f aiLambertNode1.outColor aiLambertNode1SG.surfaceShader;
-connectAttr -f aiLambertNode1.outColor aiLayerMatNode1.top_node;
-connectAttr -f aiLambertNode1.outColor aiLayerMatNode1.bottom_node;
+defaultNavigation -source aiLayerMatNode1SG -destination |pSphere1|pSphereShape1.instObjGroups[0] -connectToExisting;
+connectAttr -f aiDielectricNode1.outColor aiLayerMatNode1.top_node;
+connectAttr -f aiMetalNode1.outColor aiLayerMatNode1.bottom_node;
 connectAttr -f aiLayerMatNode1.outColor aiLayerMatNode1SG.surfaceShader;
-connectAttr -f aiLayerMatNode1.outColor initialShadingGroup.surfaceShader;
+connectAttr -f aiDielectricNode1.outColor aiLayerMatNode1SG.surfaceShader;
+connectAttr -f aiLambertNode1.outColor initialShadingGroup.surfaceShader;
 shadingNode -asLight aiAreaLight;
 setAttr "transform1.translateZ" 3;
 setAttr "aiAreaLight1.intensity" 10;
