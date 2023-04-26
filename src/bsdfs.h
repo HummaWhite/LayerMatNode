@@ -68,7 +68,7 @@ struct BSDFState
 
 		ns = sg->Ns * Dot(sg->Ngf, sg->Ng);
 		ng = sg->Ngf;
-		wo = ToLocal(nf, -sg->Rd);
+		wo = ToLocal(n, -sg->Rd);
 	}
 
 	void SetDirectionsAndRng(const AtShaderGlobals* sg, bool keepNormalFacing)
@@ -83,6 +83,8 @@ struct BSDFState
 	Vec3f ns;
 	// geometry normal, not smoothed
 	Vec3f ng;
+	// normal map
+	Vec3f nc;
 	// outgoing direction of light transport in local coordinate
 	Vec3f wo;
 	// sampler
@@ -93,11 +95,7 @@ struct BSDFState
 	BSDFWithState* bottom = nullptr;
 };
 
-struct BaseBSDF {
-	AtVector normalCamera;
-};
-
-struct FakeBSDF : public BaseBSDF
+struct FakeBSDF
 {
 	AtRGB F(Vec3f wo, Vec3f wi) const { return AtRGB(0.f); }
 	float PDF(Vec3f wo, Vec3f wi) const { return 0.f; }
@@ -106,7 +104,7 @@ struct FakeBSDF : public BaseBSDF
 	bool HasTransmit() const { return true; }
 };
 
-struct LambertBSDF : public BaseBSDF
+struct LambertBSDF
 {
 	AtRGB F(Vec3f wo, Vec3f wi) const { return albedo * AI_ONEOVERPI; }
 	float PDF(Vec3f wo, Vec3f wi) const { return Abs(wi.z) * AI_ONEOVERPI; }
@@ -117,7 +115,7 @@ struct LambertBSDF : public BaseBSDF
 	AtRGB albedo = AtRGB(.8f);
 };
 
-struct DielectricBSDF : public BaseBSDF
+struct DielectricBSDF
 {
 	AtRGB F(Vec3f wo, Vec3f wi, bool adjoint) const;
 	float PDF(Vec3f wo, Vec3f wi, bool adjoint) const;
@@ -131,7 +129,7 @@ struct DielectricBSDF : public BaseBSDF
 	float alpha = 0.f;
 };
 
-struct MetalBSDF : public BaseBSDF
+struct MetalBSDF
 {
 	AtRGB F(Vec3f wo, Vec3f wi) const;
 	float PDF(Vec3f wo, Vec3f wi) const;
@@ -148,7 +146,7 @@ struct MetalBSDF : public BaseBSDF
 
 struct BSDFWithState;
 
-struct LayeredBSDF : public BaseBSDF
+struct LayeredBSDF
 {
 	AtRGB F(Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint) const;
 	float PDF(Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint) const;

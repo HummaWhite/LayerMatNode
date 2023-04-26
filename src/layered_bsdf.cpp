@@ -6,9 +6,14 @@ bsdf_init
 {
 	auto fs = AiBSDFGetDataPtr<WithState<LayeredBSDF>>(bsdf);
 
-	static const AtBSDFLobeInfo lobe_info[] = { {AI_RAY_ALL, 0, AtString()} };
+	static const AtBSDFLobeInfo lobe_info[] = {
+		{ AI_RAY_SPECULAR_REFLECT, 0, AtString() },
+		{ AI_RAY_SPECULAR_TRANSMIT, 0, AtString() },
+		{ AI_RAY_DIFFUSE_REFLECT, 0, AtString() },
+		{ AI_RAY_DIFFUSE_TRANSMIT, 0, AtString() },
+	};
 
-	AiBSDFInitLobes(bsdf, lobe_info, 1);
+	AiBSDFInitLobes(bsdf, lobe_info, 4);
 	AiBSDFInitNormal(bsdf, fs->state.nf, false);
 }
 
@@ -23,12 +28,12 @@ bsdf_sample
 	if (sample.IsInvalid())
 		return AI_BSDF_LOBE_MASK_NONE;
 
-	float cosWi = IsDeltaRay(sample.type) ? 1.f : std::abs(sample.wi.z);
+	float cosWi = IsDeltaRay(sample.type) ? 1.f : Abs(sample.wi.z);
 
 	out_wi = AtVectorDv(ToWorld(state.nf, sample.wi));
-	out_lobe_index = 0;
-	out_lobes[0] = AtBSDFLobeSample(sample.f * cosWi / sample.pdf, 0.0f, sample.pdf);
-	return lobe_mask;
+	out_lobe_index = (!IsDeltaRay(sample.type)) * 2 + IsTransmitRay(sample.type);
+	out_lobes[out_lobe_index] = AtBSDFLobeSample(sample.f * cosWi / sample.pdf, sample.pdf, sample.pdf);
+	return lobe_mask & LobeMask(out_lobe_index);
 }
 
 bsdf_eval
@@ -38,11 +43,15 @@ bsdf_eval
 	Vec3f wiLocal = ToLocal(state.nf, wi);
 
 	AtRGB f = fs->bsdf.F(state.wo, wiLocal, state, false);
-	float cosWi = fs->bsdf.IsDelta() ? 1.f : Abs(wiLocal.z);
-	float pdf = fs->bsdf.IsDelta() ? 1.f : fs->bsdf.PDF(state.wo, wiLocal, state, false);
+	float pdf = fs->bsdf.PDF(state.wo, wiLocal, state, false);
+	float cosWiOverPdf = fs->bsdf.IsDelta() ? 1.f : Abs(wiLocal.z) / pdf;
 
-	out_lobes[0] = AtBSDFLobeSample(f * cosWi / pdf, 0.f, pdf);
-	return lobe_mask;
+	if (pdf < 1e-6f || isnan(pdf) || IsInvalid(f) || Luminance(f) > 1e8f)
+		return AI_BSDF_LOBE_MASK_NONE;
+
+	int lobe = (!fs->bsdf.IsDelta()) * 2 + (!SameHemisphere(state.wo, wiLocal));
+	out_lobes[lobe] = AtBSDFLobeSample(f * cosWiOverPdf, pdf, pdf);
+	return lobe_mask & LobeMask(lobe);
 }
 
 AtBSDF* AiLayeredBSDF(const AtShaderGlobals* sg, const WithState<LayeredBSDF>& layeredBSDF)

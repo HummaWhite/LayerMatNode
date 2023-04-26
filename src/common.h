@@ -89,12 +89,12 @@ inline Vec3f ToWorld(Vec3f n, Vec3f w)
 
 inline bool IsDeltaRay(int type)
 {
-	return (type & AI_RAY_ALL_SPECULAR) != 0;
+	return (type & AI_RAY_SPECULAR_REFLECT) || (type & AI_RAY_SPECULAR_TRANSMIT);
 }
 
 inline bool IsTransmitRay(int type)
 {
-	return (type & AI_RAY_ALL_TRANSMIT) != 0;
+	return (type & AI_RAY_DIFFUSE_TRANSMIT) || (type & AI_RAY_SPECULAR_TRANSMIT);
 }
 
 inline float Dot(Vec2f a, Vec2f b)
@@ -209,6 +209,15 @@ inline float PowerHeuristic(float f, float g)
 inline bool IsInvalid(AtRGB c)
 {
 	return (c.r < 0 || c.g < 0 || c.b < 0 || isnan(c.r) || isnan(c.g) || isnan(c.b));
+}
+
+inline AtBSDFLobeMask LobeMask(int idx) {
+	return 1 << idx;
+}
+
+template<typename T, typename... Ts>
+AtBSDFLobeMask LobeMask(T idx, Ts... idxs) {
+	return LobeMask(idx) | LobeMask(idxs...);
 }
 
 struct Vec2c

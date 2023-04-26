@@ -5,16 +5,15 @@ AI_BSDF_EXPORT_METHODS(MetalBSDFMtd);
 bsdf_init
 {
 	auto fs = AiBSDFGetDataPtr<WithState<MetalBSDF>>(bsdf);
-	fs->state.SetDirections(sg, false);
 
-	static const AtBSDFLobeInfo lobe_info[] = { {AI_RAY_ALL, 0, AtString()} };
+	static const AtBSDFLobeInfo lobe_info[] = {
+		{ AI_RAY_SPECULAR_REFLECT, 0, AtString() },
+		{ AI_RAY_DIFFUSE_REFLECT, 0, AtString() },
+	};
 
-	AiBSDFInitLobes(bsdf, lobe_info, 1);
-
-	if (AiV3IsSmall(fs->bsdf.normalCamera))
-		AiBSDFInitNormal(bsdf, fs->state.n, false);
-	else
-		AiBSDFInitNormal(bsdf, fs->bsdf.normalCamera, true); 
+	AiBSDFInitLobes(bsdf, lobe_info, 2);
+	Vec3f normal = IsSmall(fs->state.nc) ? fs->state.nf : fs->state.nc;
+	AiBSDFInitNormal(bsdf, normal, true);
 }
 
 bsdf_sample
@@ -28,14 +27,13 @@ bsdf_sample
 	if (sample.IsInvalid())
 		return AI_BSDF_LOBE_MASK_NONE;
 
-	float cosWi = IsDeltaRay(sample.type) ? 1.f : Max(sample.wi.z, 0.f);
-
-	float weight = AiBSDFBumpShadow(state.ns, state.nf, ToWorld(state.nf, sample.wi));
+	float cosWi = IsDeltaRay(sample.type) ? 1.f : Abs(sample.wi.z);
 
 	out_wi = AtVectorDv(ToWorld(state.nf, sample.wi));
-	out_lobe_index = 0;
-	out_lobes[0] = AtBSDFLobeSample(sample.f * cosWi / sample.pdf, 0.0f, sample.pdf);
-	return lobe_mask;
+	out_lobe_index = IsDeltaRay(sample.type) ? 0 : 1;
+	out_lobes[out_lobe_index] = AtBSDFLobeSample(sample.f * cosWi / sample.pdf, sample.pdf, sample.pdf);
+
+	return lobe_mask & LobeMask(out_lobe_index);
 }
 
 bsdf_eval
@@ -45,20 +43,15 @@ bsdf_eval
 	Vec3f wiLocal = ToLocal(state.nf, wi);
 
 	AtRGB f = fs->bsdf.F(state.wo, wiLocal);
-	float cosWi = fs->bsdf.IsDelta() ? 1.f : Max(wiLocal.z, 0.f);
-	float pdf = fs->bsdf.IsDelta() ? 1.f : fs->bsdf.PDF(state.wo, wiLocal);
+	float pdf = fs->bsdf.PDF(state.wo, wiLocal);
+	float cosWiOverPdf = fs->bsdf.IsDelta() ? 1.f : Abs(wiLocal.z) / pdf;
 
-	AtRGB weight;
-	if (pdf < 1e-6f || isnan(pdf) || IsInvalid(f))
-	{
-		weight = 0;
-		pdf = 1.;
-	}
-	else
-		weight = f * cosWi / pdf;
+	if (pdf < 1e-6f || isnan(pdf) || IsInvalid(f) || Luminance(f) > 1e8f)
+		return AI_BSDF_LOBE_MASK_NONE;
 
-	out_lobes[0] = AtBSDFLobeSample(f * cosWi / pdf, 0.f, pdf);
-	return lobe_mask;
+	int lobe = fs->bsdf.IsDelta() ? 0 : 1;
+	out_lobes[lobe] = AtBSDFLobeSample(f * cosWiOverPdf, pdf, pdf);
+	return lobe_mask & LobeMask(lobe);
 }
 
 AtBSDF* AiMetalBSDF(const AtShaderGlobals* sg, const WithState<MetalBSDF>& metalBSDF)

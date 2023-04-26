@@ -15,46 +15,59 @@ float SampleExponential(float a, float u) {
 
 bool Refract(Vec3f& wt, Vec3f n, Vec3f wi, float eta)
 {
-	float cosThetaI = Dot(n, wi);
-	if (cosThetaI < 0)
+	float cosTi = Dot(n, wi);
+	if (cosTi < 0)
 		eta = 1.f / eta;
-	float sin2ThetaI = Max(0.f, 1.f - Sqr(cosThetaI));
-	float sin2ThetaT = sin2ThetaI / Sqr(eta);
+	float sin2Ti = Max(0.f, 1.f - cosTi * cosTi);
+	float sin2Tt = sin2Ti / (eta * eta);
 
-	if (sin2ThetaT >= 1.f)
+	if (sin2Tt >= 1.0f)
 		return false;
 
-	float cosThetaT = Sqrt(1.f - sin2ThetaT);
-	if (cosThetaT < 0)
-		cosThetaT = -cosThetaT;
-	wt = Normalize(-wi / eta + n * (cosThetaI / eta - cosThetaT));
+	float cosTt = Sqrt(1.f - sin2Tt);
+	if (cosTi < 0)
+		cosTt = -cosTt;
+	wt = Normalize(-wi / eta + n * (cosTi / eta - cosTt));
 	return true;
 }
 
 bool Refract(Vec3f& wt, Vec3f wi, float eta)
 {
-	return Refract(wt, LocalUp, wi, eta);
+	float cosTi = wi.z;
+	if (cosTi < 0)
+		eta = 1.f / eta;
+	float sin2Ti = Max(0.f, 1.f - cosTi * cosTi);
+	float sin2Tt = sin2Ti / (eta * eta);
+
+	if (sin2Tt >= 1.0f)
+		return false;
+
+	float cosTt = Sqrt(1.f - sin2Tt);
+	if (cosTi < 0)
+		cosTt = -cosTt;
+	wt = Normalize(-wi / eta + Vec3f(0, 0, 1) * (cosTi / eta - cosTt));
+	return true;
 }
 
-float FresnelDielectric(float cosThetaI, float eta)
+float FresnelDielectric(float cosTi, float eta)
 {
-	cosThetaI = AiClamp(cosThetaI, -1.f, 1.f);
-	if (cosThetaI < 0)
+	cosTi = AiClamp(cosTi, -1.f, 1.f);
+	if (cosTi < 0.0f)
 	{
 		eta = 1.f / eta;
-		cosThetaI = -cosThetaI;
+		cosTi = -cosTi;
 	}
 
-	float sin2ThetaI = 1.f - Sqr(cosThetaI);
-	float sin2ThetaT = sin2ThetaI / Sqr(eta);
-
-	if (sin2ThetaT >= 1.f)
+	float sinTi = Sqrt(1.f - cosTi * cosTi);
+	float sinTt = sinTi / eta;
+	if (sinTt >= 1.f)
 		return 1.f;
-	float cosThetaT = Sqrt(1.f - sin2ThetaT);
 
-	float rPa = (eta * cosThetaI - cosThetaT) / (eta * cosThetaI + cosThetaT);
-	float rPe = (cosThetaI - eta * cosThetaT) / (cosThetaI + eta * cosThetaT);
-	return (Sqr(rPa) + Sqr(rPe)) * .5f;
+	float cosTt = Sqrt(1.f - sinTt * sinTt);
+
+	float rPa = (cosTi - eta * cosTt) / (cosTi + eta * cosTt);
+	float rPe = (eta * cosTi - cosTt) / (eta * cosTi + cosTt);
+	return (rPa * rPa + rPe * rPe) * .5f;
 }
 
 struct PhaseSample
@@ -190,6 +203,7 @@ BSDFSample DielectricBSDF::Sample(Vec3f wo, bool adjoint, RandomEngine& rng) con
 				return BSDFInvalidSample;
 
 			float factor = adjoint ? 1.f : Sqr(1.0f / eta);
+			factor = 1.f;
 			return BSDFSample(wi, AtRGB(factor * (1.f - fr)), 1.f - fr, AI_RAY_SPECULAR_TRANSMIT, eta);
 		}
 	}

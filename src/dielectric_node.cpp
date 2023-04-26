@@ -38,9 +38,10 @@ shader_evaluate
 	DielectricBSDF dielectricBSDF;
 	dielectricBSDF.ior = AiShaderEvalParamFlt(p_ior);
 	dielectricBSDF.alpha = AiSqr(AiShaderEvalParamFlt(p_roughness));
-	dielectricBSDF.normalCamera = AiShaderEvalParamVec(p_normal_camera);
+
 	auto fs = GetNodeLocalData<BSDFWithState>(node);
 	fs->state.SetDirectionsAndRng(sg, true);
+	fs->state.nc = AiShaderEvalParamVec(p_normal_camera);
 	fs->bsdf = dielectricBSDF;
 
 	if (sg->Rt & AI_RAY_SHADOW)

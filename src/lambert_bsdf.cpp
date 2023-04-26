@@ -9,10 +9,8 @@ bsdf_init
     static const AtBSDFLobeInfo lobe_info[] = { {AI_RAY_DIFFUSE_REFLECT, 0, AtString()} };
 
     AiBSDFInitLobes(bsdf, lobe_info, 1);
-    if (AiV3IsSmall(fs->bsdf.normalCamera))
-        AiBSDFInitNormal(bsdf, fs->state.nf, true);
-    else
-        AiBSDFInitNormal(bsdf, fs->bsdf.normalCamera, true); 
+    Vec3f normal = IsSmall(fs->state.nc) ? fs->state.nf : fs->state.nc;
+    AiBSDFInitNormal(bsdf, normal, true); 
 }
 
 bsdf_sample

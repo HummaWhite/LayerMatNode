@@ -35,9 +35,10 @@ shader_evaluate
 {
 	LambertBSDF lambertBSDF;
 	lambertBSDF.albedo = AiShaderEvalParamRGB(p_albedo);
-	lambertBSDF.normalCamera = AiShaderEvalParamVec(p_normal_camera);
+
 	auto fs = GetNodeLocalData<BSDFWithState>(node);
-	fs->state.SetDirectionsAndRng(sg, false);
+	fs->state.SetDirectionsAndRng(sg, true);
+	fs->state.nc = AiShaderEvalParamVec(p_normal_camera);
 	fs->bsdf = lambertBSDF;
 
 	if (sg->Rt & AI_RAY_SHADOW)

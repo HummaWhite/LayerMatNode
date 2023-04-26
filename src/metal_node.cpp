@@ -15,7 +15,7 @@ node_parameters
 {
 	AiParameterStr(NodeParamTypeName, MetalNodeName);
 	AiParameterRGB("albedo", .8f, .8f, .8f);
-	AiParameterFlt("ior", .4f);
+	AiParameterFlt("ior", .3f);
 	AiParameterFlt("k", .1f);
 	AiParameterFlt("roughness", .2f);
 	AiParameterVec("normal_camera", 0.0f, 0.0f, 0.0f);
@@ -44,10 +44,10 @@ shader_evaluate
 	metalBSDF.ior = AiShaderEvalParamFlt(p_ior);
 	metalBSDF.k = AiShaderEvalParamFlt(p_k);
 	metalBSDF.alpha = AiSqr(AiShaderEvalParamFlt(p_roughness));
-	metalBSDF.normalCamera = AiShaderEvalParamVec(p_normal_camera);
 
 	auto fs = GetNodeLocalData<BSDFWithState>(node);
-	fs->state.SetDirectionsAndRng(sg, false);
+	fs->state.SetDirectionsAndRng(sg, true);
+	fs->state.nc = AiShaderEvalParamVec(p_normal_camera);
 	fs->bsdf = metalBSDF;
 
 	if (sg->Rt & AI_RAY_SHADOW)

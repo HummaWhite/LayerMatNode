@@ -56,15 +56,17 @@ shader_evaluate
 	BSDFWithState* top = GetNodeBSDFWithState(reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_top_node)));
 	BSDFWithState* bottom = GetNodeBSDFWithState(reinterpret_cast<AtNode*>(AiShaderEvalParamPtr(p_bottom_node)));
 
+	static BSDFWithState fakeWithState{ FakeBSDF(), BSDFState() };
+
 	LayeredBSDF layeredBSDF;
 	layeredBSDF.thickness = AiShaderEvalParamFlt(p_thickness);
 	layeredBSDF.g = AiShaderEvalParamFlt(p_g);
 	layeredBSDF.albedo = AiShaderEvalParamRGB(p_albedo);
 
 	auto fs = GetNodeLocalData<BSDFWithState>(node);
-	fs->state.SetDirectionsAndRng(sg, true);
-	fs->state.top = top;
-	fs->state.bottom = bottom;
+	fs->state.SetDirectionsAndRng(sg, false);
+	fs->state.top = top ? top : &fakeWithState;
+	fs->state.bottom = bottom ? bottom : &fakeWithState;
 	fs->bsdf = layeredBSDF;
 
 	if (sg->Rt & AI_RAY_SHADOW)
