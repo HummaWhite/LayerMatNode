@@ -4,7 +4,7 @@ AI_BSDF_EXPORT_METHODS(DielectricBSDFMtd);
 
 bsdf_init
 {
-	auto fs = AiBSDFGetDataPtr<WithState<DielectricBSDF>>(bsdf);
+	auto fs = GetAtBSDFCustomDataPtr<WithState<DielectricBSDF>>(bsdf);
 	fs->state.SetDirections(sg, true);
 
 	static const AtBSDFLobeInfo lobe_info[] = {
@@ -15,17 +15,16 @@ bsdf_init
 	};
 
 	AiBSDFInitLobes(bsdf, lobe_info, 4);
-	Vec3f normal = IsSmall(fs->state.nc) ? fs->state.nf : fs->state.nc;
-	AiBSDFInitNormal(bsdf, normal, false);
+	AiBSDFInitNormal(bsdf, fs->state.nf, false);
 }
 
 bsdf_sample
 {
-	auto fs = AiBSDFGetDataPtr<WithState<DielectricBSDF>>(bsdf);
+	auto fs = GetAtBSDFCustomDataPtr<WithState<DielectricBSDF>>(bsdf);
 	auto& state = fs->state;
 
-	state.rng.seed(FloatBitsToInt(rnd.x) ^ state.threadId);
-	BSDFSample sample = fs->bsdf.Sample(state.wo, false, state.rng);
+	RandomEngine rng(FloatBitsToInt(rnd.x) ^ state.seed);
+	BSDFSample sample = fs->bsdf.Sample(state.wo, false, rng);
 
 	if (sample.IsInvalid())
 		return AI_BSDF_LOBE_MASK_NONE;
@@ -40,7 +39,7 @@ bsdf_sample
 
 bsdf_eval
 {
-	auto fs = AiBSDFGetDataPtr<WithState<DielectricBSDF>>(bsdf);
+	auto fs = GetAtBSDFCustomDataPtr<WithState<DielectricBSDF>>(bsdf);
 	auto& state = fs->state;
 	Vec3f wiLocal = ToLocal(state.nf, wi);
 
@@ -59,7 +58,6 @@ bsdf_eval
 AtBSDF* AiDielectricBSDF(const AtShaderGlobals* sg, const WithState<DielectricBSDF>& dielectricBSDF)
 {
 	AtBSDF* bsdf = AiBSDF(sg, AI_RGB_WHITE, DielectricBSDFMtd, sizeof(WithState<DielectricBSDF>));
-	auto data = AiBSDFGetDataPtr<WithState<DielectricBSDF>>(bsdf);
-	*data = dielectricBSDF;
+	GetAtBSDFCustomDataRef<WithState<DielectricBSDF>>(bsdf) = dielectricBSDF;
 	return bsdf;
 }

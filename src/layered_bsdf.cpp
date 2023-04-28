@@ -4,7 +4,8 @@ AI_BSDF_EXPORT_METHODS(LayeredBSDFMtd);
 
 bsdf_init
 {
-	auto fs = AiBSDFGetDataPtr<WithState<LayeredBSDF>>(bsdf);
+	auto fs = GetAtBSDFCustomDataPtr<WithState<LayeredBSDF>>(bsdf);
+	fs->state.SetDirectionsAndRng(sg, true);
 
 	static const AtBSDFLobeInfo lobe_info[] = {
 		{ AI_RAY_SPECULAR_REFLECT, 0, AtString() },
@@ -19,11 +20,11 @@ bsdf_init
 
 bsdf_sample
 {
-	auto fs = AiBSDFGetDataPtr<WithState<LayeredBSDF>>(bsdf);
+	auto fs = GetAtBSDFCustomDataPtr<WithState<LayeredBSDF>>(bsdf);
 	auto& state = fs->state;
 
-	state.rng.seed(FloatBitsToInt(rnd.x) ^ state.threadId);
-	BSDFSample sample = fs->bsdf.Sample(state.wo, state, false);
+	RandomEngine rng(FloatBitsToInt(rnd.x) ^ state.seed);
+	BSDFSample sample = fs->bsdf.Sample(state.wo, state, rng, false);
 
 	if (sample.IsInvalid())
 		return AI_BSDF_LOBE_MASK_NONE;
@@ -38,12 +39,13 @@ bsdf_sample
 
 bsdf_eval
 {
-	auto fs = AiBSDFGetDataPtr<WithState<LayeredBSDF>>(bsdf);
+	auto fs = GetAtBSDFCustomDataPtr<WithState<LayeredBSDF>>(bsdf);
 	auto& state = fs->state;
 	Vec3f wiLocal = ToLocal(state.nf, wi);
 
-	AtRGB f = fs->bsdf.F(state.wo, wiLocal, state, false);
-	float pdf = fs->bsdf.PDF(state.wo, wiLocal, state, false);
+	RandomEngine rng(FloatBitsToInt(wi.x) ^ FloatBitsToInt(wi.y) ^ state.seed);
+	AtRGB f = fs->bsdf.F(state.wo, wiLocal, state, rng, false);
+	float pdf = fs->bsdf.PDF(state.wo, wiLocal, state, rng, false);
 	float cosWiOverPdf = fs->bsdf.IsDelta() ? 1.f : Abs(wiLocal.z) / pdf;
 
 	if (pdf < 1e-6f || isnan(pdf) || IsInvalid(f) || Luminance(f) > 1e8f)
@@ -57,7 +59,6 @@ bsdf_eval
 AtBSDF* AiLayeredBSDF(const AtShaderGlobals* sg, const WithState<LayeredBSDF>& layeredBSDF)
 {
 	AtBSDF* bsdf = AiBSDF(sg, AI_RGB_WHITE, LayeredBSDFMtd, sizeof(WithState<LayeredBSDF>));
-	auto data = AiBSDFGetDataPtr<WithState<LayeredBSDF>>(bsdf);
-	*data = layeredBSDF;
+	GetAtBSDFCustomDataRef<WithState<LayeredBSDF>>(bsdf) = layeredBSDF;
 	return bsdf;
 }

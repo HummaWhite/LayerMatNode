@@ -28,15 +28,27 @@ inline AtString GetNodeTypeName(const AtNode* node, AtShaderGlobals* sg)
 }
 
 template<typename T>
-T* GetNodeLocalData(const AtNode* node)
+T* GetNodeLocalDataPtr(const AtNode* node)
 {
 	return reinterpret_cast<T*>(AiNodeGetLocalData(node));
 }
 
-template<typename BSDFT>
-BSDFT* AiBSDFGetDataPtr(const AtBSDF* bsdf)
+template<typename T>
+T& GetNodeLocalDataRef(const AtNode* node)
 {
-	return reinterpret_cast<BSDFT*>(AiBSDFGetData(bsdf));
+	return *reinterpret_cast<T*>(AiNodeGetLocalData(node));
+}
+
+template<typename T>
+T* GetAtBSDFCustomDataPtr(const AtBSDF* bsdf)
+{
+	return reinterpret_cast<T*>(AiBSDFGetData(bsdf));
+}
+
+template<typename T>
+T& GetAtBSDFCustomDataRef(const AtBSDF* bsdf)
+{
+	return *reinterpret_cast<T*>(AiBSDFGetData(bsdf));
 }
 
 using Vec2f = AtVector2;

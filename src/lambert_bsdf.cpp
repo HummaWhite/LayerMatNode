@@ -4,22 +4,22 @@ AI_BSDF_EXPORT_METHODS(LambertBSDFMtd);
 
 bsdf_init
 {
-    auto fs = AiBSDFGetDataPtr<WithState<LambertBSDF>>(bsdf);
+    auto fs = GetAtBSDFCustomDataPtr<WithState<LambertBSDF>>(bsdf);
+    fs->state.SetDirectionsAndRng(sg, false);
 
-    static const AtBSDFLobeInfo lobe_info[] = { {AI_RAY_DIFFUSE_REFLECT, 0, AtString()} };
+    static const AtBSDFLobeInfo lobe_info[] = { { AI_RAY_DIFFUSE_REFLECT, 0, AtString() } };
 
     AiBSDFInitLobes(bsdf, lobe_info, 1);
-    Vec3f normal = IsSmall(fs->state.nc) ? fs->state.nf : fs->state.nc;
-    AiBSDFInitNormal(bsdf, normal, true); 
+    AiBSDFInitNormal(bsdf, fs->state.nf, true); 
 }
 
 bsdf_sample
 {
-    auto fs = AiBSDFGetDataPtr<WithState<LambertBSDF>>(bsdf);
+    auto fs = GetAtBSDFCustomDataPtr<WithState<LambertBSDF>>(bsdf);
     auto& state = fs->state;
 
-    state.rng.seed(FloatBitsToInt(rnd.x) ^ state.threadId);
-    BSDFSample sample = fs->bsdf.Sample(state.wo, state.rng);
+    RandomEngine rng(FloatBitsToInt(rnd.x) + state.seed * (1e7 + 7));
+    BSDFSample sample = fs->bsdf.Sample(state.wo, rng);
 
     if (sample.IsInvalid())
         return AI_BSDF_LOBE_MASK_NONE;
@@ -32,7 +32,7 @@ bsdf_sample
 
 bsdf_eval
 {
-    auto fs = AiBSDFGetDataPtr<WithState<LambertBSDF>>(bsdf);
+    auto fs = GetAtBSDFCustomDataPtr<WithState<LambertBSDF>>(bsdf);
     auto& state = fs->state;
 
     Vec3f wiLocal = ToLocal(state.nf, wi);
@@ -43,7 +43,6 @@ bsdf_eval
 AtBSDF* AiLambertBSDF(const AtShaderGlobals* sg, const WithState<LambertBSDF>& lambertBSDF)
 {
     AtBSDF* bsdf = AiBSDF(sg, AI_RGB_WHITE, LambertBSDFMtd, sizeof(WithState<LambertBSDF>));
-    auto data = AiBSDFGetDataPtr<WithState<LambertBSDF>>(bsdf);
-    *data = lambertBSDF;
+    GetAtBSDFCustomDataRef<WithState<LambertBSDF>>(bsdf) = lambertBSDF;
     return bsdf;
 }

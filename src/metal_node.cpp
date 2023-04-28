@@ -18,13 +18,12 @@ node_parameters
 	AiParameterFlt("ior", .3f);
 	AiParameterFlt("k", .1f);
 	AiParameterFlt("roughness", .2f);
-	AiParameterVec("normal_camera", 0.0f, 0.0f, 0.0f);
 }
 
 node_initialize
 {
-	auto bsdf = new BSDFWithState;
-	bsdf->bsdf = MetalBSDF();
+	auto bsdf = new BSDF;
+	*bsdf = MetalBSDF();
 	AiNodeSetLocalData(node, bsdf);
 }
 
@@ -34,7 +33,7 @@ node_update
 
 node_finish
 {
-	//delete GetNodeLocalData<BSDF>(node);
+	//delete GetNodeLocalDataPtr<BSDF>(node);
 }
 
 shader_evaluate
@@ -45,12 +44,9 @@ shader_evaluate
 	metalBSDF.k = AiShaderEvalParamFlt(p_k);
 	metalBSDF.alpha = AiSqr(AiShaderEvalParamFlt(p_roughness));
 
-	auto fs = GetNodeLocalData<BSDFWithState>(node);
-	fs->state.SetDirectionsAndRng(sg, true);
-	fs->state.nc = AiShaderEvalParamVec(p_normal_camera);
-	fs->bsdf = metalBSDF;
+	GetNodeLocalDataRef<BSDF>(node) = metalBSDF;
 
 	if (sg->Rt & AI_RAY_SHADOW)
 		return;
-	sg->out.CLOSURE() = AiMetalBSDF(sg, { metalBSDF, fs->state });
+	sg->out.CLOSURE() = AiMetalBSDF(sg, { metalBSDF, BSDFState() });
 }

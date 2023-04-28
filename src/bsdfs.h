@@ -47,7 +47,13 @@ struct BSDFSample
 
 const BSDFSample BSDFInvalidSample(Vec3f(), AtRGB(), 0, AI_RAY_UNDEFINED);
 
-struct BSDFWithState;
+struct FakeBSDF;
+struct LambertBSDF;
+struct DielectricBSDF;
+struct MetalBSDF;
+struct LayeredBSDF;
+
+using BSDF = std::variant<FakeBSDF, LambertBSDF, DielectricBSDF, MetalBSDF, LayeredBSDF>;
 
 struct BSDFState
 {
@@ -67,32 +73,28 @@ struct BSDFState
 			nf = (Dot(sg->Ng, sg->Nf) > 0) ? sg->Nf : -sg->Nf;
 
 		ns = sg->Ns * Dot(sg->Ngf, sg->Ng);
-		ng = sg->Ngf;
 		wo = ToLocal(n, -sg->Rd);
 	}
 
 	void SetDirectionsAndRng(const AtShaderGlobals* sg, bool keepNormalFacing)
 	{
 		SetDirections(sg, keepNormalFacing);
-		threadId = FloatBitsToInt(sg->px) + FloatBitsToInt(sg->py);
+		seed = (sg->x << 16 | sg->y) ^ (FloatBitsToInt(sg->px) * (sg->tid) + FloatBitsToInt(sg->py));
 	}
 	Vec3f n;
 	// front-facing mapped smooth normal
 	Vec3f nf;
 	// front-facing smooth normal without normal map
 	Vec3f ns;
-	// geometry normal, not smoothed
-	Vec3f ng;
-	// normal map
-	Vec3f nc;
-	// outgoing direction of light transport in local coordinate
+	// top normal
+	Vec3f nt;
+	// bottom normal
+	Vec3f nb;
 	Vec3f wo;
-	// sampler
-	RandomEngine rng;
-	int threadId;
+	int seed;
 
-	BSDFWithState* top = nullptr;
-	BSDFWithState* bottom = nullptr;
+	BSDF* top = nullptr;
+	BSDF* bottom = nullptr;
 };
 
 struct FakeBSDF
@@ -144,13 +146,11 @@ struct MetalBSDF
 	float alpha = .04f;
 };
 
-struct BSDFWithState;
-
 struct LayeredBSDF
 {
-	AtRGB F(Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint) const;
-	float PDF(Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint) const;
-	BSDFSample Sample(Vec3f wo, BSDFState& s, bool adjoint) const;
+	AtRGB F(Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint) const;
+	float PDF(Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint) const;
+	BSDFSample Sample(Vec3f wo, const BSDFState& s, RandomEngine& rng, bool adjoint) const;
 
 	bool IsDelta() const { return false; }
 	bool HasTransmit() const { return true; }
@@ -158,26 +158,9 @@ struct LayeredBSDF
 	float thickness = .1f;
 	float g = .4f;
 	AtRGB albedo = AtRGB(.8f);
-	int maxDepth = 20;
-	int nSamples = 64;
+	int maxDepth = 32;
+	int nSamples = 1;
 	bool twoSided = false;
-};
-
-using BSDF = std::variant<FakeBSDF, LambertBSDF, DielectricBSDF, MetalBSDF, LayeredBSDF>;
-
-struct BSDFWithState
-{
-	BSDFWithState() = default;
-	BSDFWithState(const BSDF& bsdf, const BSDFState& state) : bsdf(bsdf), state(state) {}
-
-	template<typename BSDFT>
-	BSDFT& Get()
-	{
-		return std::get<BSDFT>(bsdf);
-	}
-
-	BSDF bsdf;
-	BSDFState state;
 };
 
 template<typename BSDFT>
@@ -188,14 +171,12 @@ struct WithState
 	BSDFState state;
 };
 
-// TODO:
-// replace with std::visit if applicable
-AtRGB F(const BSDF& bsdf, Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint);
-float PDF(const BSDF& bsdf, Vec3f wo, Vec3f wi, BSDFState& s, bool adjoint);
-BSDFSample Sample(const BSDF& bsdf, Vec3f wo, BSDFState& s, bool adjoint);
+AtRGB F(const BSDF* bsdf, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint);
+float PDF(const BSDF* bsdf, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint);
+BSDFSample Sample(const BSDF* bsdf, Vec3f wo, const BSDFState& s, RandomEngine& rng, bool adjoint);
 
-bool IsDelta(const BSDF& bsdf);
-bool HasTransmit(const BSDF& bsdf);
+bool IsDelta(const BSDF* bsdf);
+bool HasTransmit(const BSDF* bsdf);
 
 bool Refract(Vec3f& wt, Vec3f n, Vec3f wi, float eta);
 bool Refract(Vec3f& wt, Vec3f wi, float eta);

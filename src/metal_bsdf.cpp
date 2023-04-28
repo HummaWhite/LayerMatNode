@@ -4,7 +4,8 @@ AI_BSDF_EXPORT_METHODS(MetalBSDFMtd);
 
 bsdf_init
 {
-	auto fs = AiBSDFGetDataPtr<WithState<MetalBSDF>>(bsdf);
+	auto fs = GetAtBSDFCustomDataPtr<WithState<MetalBSDF>>(bsdf);
+	fs->state.SetDirectionsAndRng(sg, false);
 
 	static const AtBSDFLobeInfo lobe_info[] = {
 		{ AI_RAY_SPECULAR_REFLECT, 0, AtString() },
@@ -12,17 +13,16 @@ bsdf_init
 	};
 
 	AiBSDFInitLobes(bsdf, lobe_info, 2);
-	Vec3f normal = IsSmall(fs->state.nc) ? fs->state.nf : fs->state.nc;
-	AiBSDFInitNormal(bsdf, normal, true);
+	AiBSDFInitNormal(bsdf, fs->state.nf, true);
 }
 
 bsdf_sample
 {
-	auto fs = AiBSDFGetDataPtr<WithState<MetalBSDF>>(bsdf);
+	auto fs = GetAtBSDFCustomDataPtr<WithState<MetalBSDF>>(bsdf);
 	auto& state = fs->state;
 
-	state.rng.seed(FloatBitsToInt(rnd.x) ^ state.threadId);
-	BSDFSample sample = fs->bsdf.Sample(state.wo, state.rng);
+	RandomEngine rng(FloatBitsToInt(rnd.x) ^ state.seed);
+	BSDFSample sample = fs->bsdf.Sample(state.wo, rng);
 
 	if (sample.IsInvalid())
 		return AI_BSDF_LOBE_MASK_NONE;
@@ -38,7 +38,7 @@ bsdf_sample
 
 bsdf_eval
 {
-	auto fs = AiBSDFGetDataPtr<WithState<MetalBSDF>>(bsdf);
+	auto fs = GetAtBSDFCustomDataPtr<WithState<MetalBSDF>>(bsdf);
 	auto& state = fs->state;
 	Vec3f wiLocal = ToLocal(state.nf, wi);
 
@@ -57,7 +57,6 @@ bsdf_eval
 AtBSDF* AiMetalBSDF(const AtShaderGlobals* sg, const WithState<MetalBSDF>& metalBSDF)
 {
 	AtBSDF* bsdf = AiBSDF(sg, AI_RGB_WHITE, MetalBSDFMtd, sizeof(WithState<MetalBSDF>));
-	auto data = AiBSDFGetDataPtr<WithState<MetalBSDF>>(bsdf);
-	*data = metalBSDF;
+	GetAtBSDFCustomDataRef<WithState<MetalBSDF>>(bsdf) = metalBSDF;
 	return bsdf;
 }

@@ -14,13 +14,12 @@ node_parameters
 	AiParameterStr(NodeParamTypeName, DielectricNodeName);
 	AiParameterFlt("ior", 1.5f);
 	AiParameterFlt("roughness", 0.f);
-	AiParameterVec("normal_camera", 0.0f, 0.0f, 0.0f);
 }
 
 node_initialize
 {
-	auto bsdf = new BSDFWithState;
-	bsdf->bsdf = DielectricBSDF();
+	auto bsdf = new BSDF;
+	*bsdf = DielectricBSDF();
 	AiNodeSetLocalData(node, bsdf);
 }
 
@@ -30,7 +29,7 @@ node_update
 
 node_finish
 {
-	//delete GetNodeLocalData<BSDF>(node);
+	//delete GetNodeLocalDataPtr<BSDF>(node);
 }
 
 shader_evaluate
@@ -38,13 +37,9 @@ shader_evaluate
 	DielectricBSDF dielectricBSDF;
 	dielectricBSDF.ior = AiShaderEvalParamFlt(p_ior);
 	dielectricBSDF.alpha = AiSqr(AiShaderEvalParamFlt(p_roughness));
-
-	auto fs = GetNodeLocalData<BSDFWithState>(node);
-	fs->state.SetDirectionsAndRng(sg, true);
-	fs->state.nc = AiShaderEvalParamVec(p_normal_camera);
-	fs->bsdf = dielectricBSDF;
+	GetNodeLocalDataRef<BSDF>(node) = dielectricBSDF;
 
 	if (sg->Rt & AI_RAY_SHADOW)
 		return;
-	sg->out.CLOSURE() = AiDielectricBSDF(sg, { dielectricBSDF, fs->state });
+	sg->out.CLOSURE() = AiDielectricBSDF(sg, { dielectricBSDF, BSDFState() });
 }
