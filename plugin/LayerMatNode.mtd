@@ -1,9 +1,41 @@
 [node LayerMatNode]
+	desc					STRING	"Layered BSDF Material Node"
     maya.name               STRING  "la_LayeredBSDF"
     maya.id                 INT      0x00070000
     maya.classification     STRING  "shader/surface"
     maya.output_name        STRING  "outColor"
     maya.output_shortname   STRING  "out"
+	
+	[attr thickness]
+		desc				STRING	"Thickness of layer"
+		min					FLOAT	0.0001
+		max					FLOAT	1.0
+		default				FLOAT	0.1
+		maya.name			STRING	"thickness"
+		maya.shortname		STRING	"t"
+
+	[attr g]
+		desc				STRING	"Medium scattering coefficient"
+		min					FLOAT	0.0001
+		max					FLOAT	1.0
+		default				FLOAT	0.4
+		maya.name			STRING	"g"
+		maya.shortname		STRING	"g"
+
+	[attr albedo]
+		desc				STRING	"Medium albedo"
+		maya.name			STRING	"albedo"
+		maya.shortname		STRING	"a"
+
+	[attr top_normal]
+		desc				STRING	"Normal of top layer"
+		maya.name			STRING	"top_normal"
+		maya.shortname		STRING	"tn"
+	
+	[attr bottom_normal]
+		desc				STRING	"Normal of bottom layer"
+		maya.name			STRING	"bottom_normal"
+		maya.shortname		STRING	"bn"
 
 [node LambertNode]
 	maya.name				STRING	"la_LambertBSDF"
@@ -12,6 +44,11 @@
 	maya.output_name		STRING	"outColor"
 	maya.output_shortname	STRING	"out"
 
+	[attr albedo]
+		desc				STRING	"Albedo"
+		maya.name			STRING	"albedo"
+		maya.shortname		STRING	"a"
+
 [node DielectricNode]
 	maya.name				STRING	"la_DielectricBSDF"
 	maya.id					INT		0x00070002
@@ -19,9 +56,54 @@
 	maya.output_name		STRING	"outColor"
 	maya.output_shortname	STRING	"out"
 
+	[attr ior]
+		desc				STRING	"Index of refraction"
+		min					FLOAT	0.0001
+		max					FLOAT	3.0
+		default				FLOAT	1.5
+		maya.name			STRING	"ior"
+		maya.shortname		STRING	"i"
+
+	[attr roughness]
+		desc				STRING	"roughness"
+		min					FLOAT	0
+		max					FLOAT	1
+		default				FLOAT	0
+		maya.name			STRING	"roughness"
+		maya.shortname		STRING	"r"
+
 [node MetalNode]
 	maya.name				STRING	"la_MetalBSDF"
 	maya.id					INT		0x00070003
 	maya.classification		STRING	"shader/surface"
 	maya.output_name		STRING	"outColor"
 	maya.output_shortname	STRING	"out"
+
+	[attr albedo]
+		desc				STRING	"Albedo"
+		maya.name			STRING	"albedo"
+		maya.shortname		STRING	"a"
+
+	[attr ior]
+		desc				STRING	"Index of refraction (real)"
+		min					FLOAT	0.0001
+		max					FLOAT	3.0
+		default				FLOAT	0.3
+		maya.name			STRING	"ior"
+		maya.shortname		STRING	"i"
+
+	[attr k]
+		desc				STRING	"Index of refraction (img)"
+		min					FLOAT	0.0001
+		max					FLOAT	3.0
+		default				FLOAT	0.4
+		maya.name			STRING	"k"
+		maya.shortname		STRING	"k"
+
+	[attr roughness]
+		desc				STRING	"roughness"
+		min					FLOAT	0
+		max					FLOAT	1
+		default				FLOAT	0.2
+		maya.name			STRING	"roughness"
+		maya.shortname		STRING	"r"

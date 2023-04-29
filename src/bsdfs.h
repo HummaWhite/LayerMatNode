@@ -87,9 +87,9 @@ struct BSDFState
 	// front-facing smooth normal without normal map
 	Vec3f ns;
 	// top normal
-	Vec3f nt;
+	Vec3f nTop;
 	// bottom normal
-	Vec3f nb;
+	Vec3f nBottom;
 	Vec3f wo;
 	int seed;
 
@@ -174,6 +174,10 @@ struct WithState
 AtRGB F(const BSDF* bsdf, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint);
 float PDF(const BSDF* bsdf, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint);
 BSDFSample Sample(const BSDF* bsdf, Vec3f wo, const BSDFState& s, RandomEngine& rng, bool adjoint);
+
+AtRGB F(const BSDF* bsdf, Vec3f n, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint);
+float PDF(const BSDF* bsdf, Vec3f n, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint);
+BSDFSample Sample(const BSDF* bsdf, Vec3f n, Vec3f wo, const BSDFState& s, RandomEngine& rng, bool adjoint);
 
 bool IsDelta(const BSDF* bsdf);
 bool HasTransmit(const BSDF* bsdf);

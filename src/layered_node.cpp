@@ -33,7 +33,7 @@ node_parameters
 	AiParameterNode("top_node", nullptr);
 	AiParameterNode("bottom_node", nullptr);
 	AiParameterFlt("thickness", .1f);
-	AiParameterFlt("medium_scatter_g", .4f);
+	AiParameterFlt("g", .4f);
 	AiParameterRGB("albedo", .8f, .8f, .8f);
 	AiParameterVec("top_normal", 0.f, 0.f, 1.f);
 	AiParameterVec("bottom_normal", 0.f, 0.f, 1.f);
@@ -71,8 +71,19 @@ shader_evaluate
 	BSDFState state;
 	state.top = top ? top : &fakeBSDF;
 	state.bottom = bottom ? bottom : &fakeBSDF;
-	state.nt = AiShaderEvalParamVec(p_top_normal);
-	state.nb = AiShaderEvalParamVec(p_bottom_normal);
+
+	state.nTop = AiShaderEvalParamVec(p_top_normal);
+	state.nBottom = AiShaderEvalParamVec(p_bottom_normal);
+
+	if (IsSmall(state.nTop))
+		state.nTop = Vec3f(0.f, 0.f, 1.f);
+	else
+		state.nTop = state.nTop * 2.f - 1.f;
+
+	if (IsSmall(state.nBottom))
+		state.nBottom = Vec3f(0.f, 0.f, 1.f);
+	else
+		state.nBottom = state.nBottom * 2.f - 1.f;
 
 	if (sg->Rt & AI_RAY_SHADOW)
 		return;

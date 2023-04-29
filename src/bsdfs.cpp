@@ -551,7 +551,7 @@ BSDFSample LayeredBSDF::Sample(Vec3f wo, const BSDFState& s, RandomEngine& rng, 
 	BSDF* ent = entTop ? s.top : s.bottom;
 	BSDF* oth = entTop ? s.bottom : s.top;
 
-	auto ins = ::Sample(ent, wo, s, rng, adjoint);
+	auto ins = ::Sample(ent, entTop ? s.nTop : s.nBottom, wo, s, rng, adjoint);
 
 	if (ins.IsInvalid() || ins.pdf < 1e-8f || ins.wi.z == 0 || IsSmall(ins.f))
 		return BSDFInvalidSample;
@@ -610,7 +610,7 @@ BSDFSample LayeredBSDF::Sample(Vec3f wo, const BSDFState& s, RandomEngine& rng, 
 			z = AiClamp(zNext, 0.f, thickness);
 		}
 		BSDF* interf = (z == 0) ? s.top : s.bottom;
-		auto bsdfSample = ::Sample(interf, -w, s, rng, adjoint);
+		auto bsdfSample = ::Sample(interf, (z == 0) ? s.nTop : s.nBottom, -w, s, rng, adjoint);
 
 		if (bsdfSample.IsInvalid() || IsSmall(bsdfSample.f) || bsdfSample.pdf < 1e-8f ||
 			bsdfSample.wi.z == 0)
@@ -696,6 +696,29 @@ BSDFSample Sample(const BSDF* bsdf, Vec3f wo, const BSDFState& s, RandomEngine& 
 		return std::get_if<LayeredBSDF>(bsdf)->Sample(wo, s, rng, adjoint);
 	}
 	return BSDFInvalidSample;
+}
+
+AtRGB F(const BSDF* bsdf, Vec3f n, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint)
+{
+	Vec3f woLocal = ToLocal(n, wo);
+	Vec3f wiLocal = ToLocal(n, wi);
+	return F(bsdf, woLocal, wiLocal, s, rng, adjoint);
+}
+
+float PDF(const BSDF* bsdf, Vec3f n, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint)
+{
+	Vec3f woLocal = ToLocal(n, wo);
+	Vec3f wiLocal = ToLocal(n, wi);
+	return PDF(bsdf, woLocal, wiLocal, s, rng, adjoint);
+}
+
+BSDFSample Sample(const BSDF* bsdf, Vec3f n, Vec3f wo, const BSDFState& s, RandomEngine& rng, bool adjoint)
+{
+	Vec3f woLocal = ToLocal(n, wo);
+	BSDFSample sample = Sample(bsdf, woLocal, s, rng, adjoint);
+	if (!sample.IsInvalid())
+		sample.wi = ToWorld(n, sample.wi);
+	return sample;
 }
 
 bool IsDelta(const BSDF* bsdf)
