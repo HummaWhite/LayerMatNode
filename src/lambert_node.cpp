@@ -5,7 +5,6 @@ AI_SHADER_NODE_EXPORT_METHODS(LambertNodeMtd);
 enum LambertNodeParams
 {
 	p_albedo = 1,
-	p_normal_camera,
 };
 
 node_parameters

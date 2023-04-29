@@ -14,7 +14,9 @@ enum LayeredNodeParams
 	p_g,
 	p_albedo,
 	p_top_normal,
+	p_top_correct_normal,
 	p_bottom_normal,
+	p_bottom_correct_normal,
 };
 
 BSDF* GetNodeBSDF(const AtNode* node)
@@ -35,8 +37,10 @@ node_parameters
 	AiParameterFlt("thickness", .1f);
 	AiParameterFlt("g", .4f);
 	AiParameterRGB("albedo", .8f, .8f, .8f);
-	AiParameterVec("top_normal", 0.f, 0.f, 1.f);
-	AiParameterVec("bottom_normal", 0.f, 0.f, 1.f);
+	AiParameterVec("top_normal", 0.f, 0.f, 0.f);
+	AiParameterBool("top_correct_normal", false);
+	AiParameterVec("bottom_normal", 0.f, 0.f, 0.f);
+	AiParameterBool("bottom_correct_normal", false);
 }
 
 node_initialize
@@ -74,16 +78,26 @@ shader_evaluate
 
 	state.nTop = AiShaderEvalParamVec(p_top_normal);
 	state.nBottom = AiShaderEvalParamVec(p_bottom_normal);
+	bool correctTop = AiShaderEvalParamBool(p_top_correct_normal);
+	bool correctBottom = AiShaderEvalParamBool(p_bottom_correct_normal);
 
 	if (IsSmall(state.nTop))
 		state.nTop = Vec3f(0.f, 0.f, 1.f);
 	else
+	{
+		if (correctTop)
+			state.nTop = Pow(state.nTop, 1.f / 2.2f);
 		state.nTop = state.nTop * 2.f - 1.f;
+	}
 
 	if (IsSmall(state.nBottom))
 		state.nBottom = Vec3f(0.f, 0.f, 1.f);
 	else
+	{
+		if (correctBottom)
+			state.nBottom = Pow(state.nBottom, 1.f / 2.2f);
 		state.nBottom = state.nBottom * 2.f - 1.f;
+	}
 
 	if (sg->Rt & AI_RAY_SHADOW)
 		return;

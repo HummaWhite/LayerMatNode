@@ -144,6 +144,7 @@ struct MetalBSDF
 	float ior = .4f;
 	float k = .5f;
 	float alpha = .04f;
+	bool SchlickFresnel = false;
 };
 
 struct LayeredBSDF

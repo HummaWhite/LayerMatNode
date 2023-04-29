@@ -5,6 +5,14 @@
     maya.classification     STRING  "shader/surface"
     maya.output_name        STRING  "outColor"
     maya.output_shortname   STRING  "out"
+
+	[attr top_node]
+		maya.name			STRING	"top_node"
+		maya.shortname		STRING	"tnode"
+
+	[attr bottom_node]
+		maya.name			STRING	"bottom_node"
+		maya.shortname		STRING	"bnode"
 	
 	[attr thickness]
 		desc				STRING	"Thickness of layer"
@@ -29,13 +37,25 @@
 
 	[attr top_normal]
 		desc				STRING	"Normal of top layer"
+		default				VECTOR	0 0 0
 		maya.name			STRING	"top_normal"
 		maya.shortname		STRING	"tn"
+
+	[attr top_correct_normal]
+		desc				STRING	"Gamma Correct"
+		maya.name			STRING	"top_correct_normal"
+		maya.shortname		STRING	"tcn"
 	
 	[attr bottom_normal]
 		desc				STRING	"Normal of bottom layer"
+		default				VECTOR	0 0 0
 		maya.name			STRING	"bottom_normal"
 		maya.shortname		STRING	"bn"
+
+	[attr bottom_correct_normal]
+		desc				STRING	"Gamma Correct"
+		maya.name			STRING	"bottom_correct_normal"
+		maya.shortname		STRING	"bcn"
 
 [node LambertNode]
 	maya.name				STRING	"la_LambertBSDF"
@@ -107,3 +127,8 @@
 		default				FLOAT	0.2
 		maya.name			STRING	"roughness"
 		maya.shortname		STRING	"r"
+
+	[attr schlick_f]
+		default				BOOL	true
+		maya.name			STRING	"schlick_f"
+		maya.shortname		STRING	"sf"

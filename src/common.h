@@ -218,6 +218,16 @@ inline float PowerHeuristic(float f, float g)
 	return f2 / (f2 + g2);
 }
 
+inline Vec3f RGBToVec3(AtRGB c)
+{
+	return Vec3f(c.r, c.g, c.b);
+}
+
+inline Vec3f Pow(Vec3f v, float p)
+{
+	return Vec3f(std::pow(v.x, p), std::pow(v.y, p), std::pow(v.z, p));
+}
+
 inline bool IsInvalid(AtRGB c)
 {
 	return (c.r < 0 || c.g < 0 || c.b < 0 || isnan(c.r) || isnan(c.g) || isnan(c.b));

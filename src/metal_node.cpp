@@ -8,7 +8,7 @@ enum MetalNodeParams
 	p_ior,
 	p_k,
 	p_roughness,
-	p_normal_camera,
+	p_schlick_f
 };
 
 node_parameters
@@ -18,6 +18,7 @@ node_parameters
 	AiParameterFlt("ior", .3f);
 	AiParameterFlt("k", .1f);
 	AiParameterFlt("roughness", .2f);
+	AiParameterBool("schlick_f", true);
 }
 
 node_initialize
@@ -43,6 +44,7 @@ shader_evaluate
 	metalBSDF.ior = AiShaderEvalParamFlt(p_ior);
 	metalBSDF.k = AiShaderEvalParamFlt(p_k);
 	metalBSDF.alpha = AiSqr(AiShaderEvalParamFlt(p_roughness));
+	metalBSDF.SchlickFresnel = AiShaderEvalParamBool(p_schlick_f);
 
 	GetNodeLocalDataRef<BSDF>(node) = metalBSDF;
 

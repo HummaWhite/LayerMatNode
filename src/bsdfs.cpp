@@ -70,6 +70,11 @@ float FresnelDielectric(float cosTi, float eta)
 	return (rPa * rPa + rPe * rPe) * .5f;
 }
 
+AtRGB FresnelSchlick(float cosTheta, AtRGB f0, float roughness)
+{
+	return f0 + (Max(AtRGB(1.f - roughness), f0) - f0) * Pow5(1.f - cosTheta);
+}
+
 struct PhaseSample
 {
 	PhaseSample(Vec3f w, float pdf) : wi(w), pdf(pdf), p(pdf) {}
@@ -203,7 +208,6 @@ BSDFSample DielectricBSDF::Sample(Vec3f wo, bool adjoint, RandomEngine& rng) con
 				return BSDFInvalidSample;
 
 			float factor = adjoint ? 1.f : Sqr(1.0f / eta);
-			factor = 1.f;
 			return BSDFSample(wi, AtRGB(factor * (1.f - fr)), 1.f - fr, AI_RAY_SPECULAR_TRANSMIT, eta);
 		}
 	}
@@ -274,7 +278,8 @@ AtRGB MetalBSDF::F(Vec3f wo, Vec3f wi) const
 		return AtRGB(0.f);
 
 	Vec3f wh = Normalize(wo + wi);
-	float fr = FresnelConductor(AbsDot(wh, wo), ior, k);
+	AtRGB fr = SchlickFresnel ? FresnelSchlick(AbsDot(wh, wo), albedo, Sqrt(alpha)) :
+		AtRGB(FresnelConductor(AbsDot(wh, wo), ior, k));
 
 	return albedo * GTR2(wh.z, alpha) * fr * SmithG(wo.z, wi.z, alpha) / (4.f * cosWo * cosWi);
 }

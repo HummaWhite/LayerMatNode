@@ -6,7 +6,6 @@ enum DielectricNodeParams
 {
 	p_ior = 1,
 	p_roughness,
-	p_normal_camera,
 };
 
 node_parameters
