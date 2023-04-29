@@ -45,6 +45,10 @@
 		desc				STRING	"Gamma Correct"
 		maya.name			STRING	"top_correct_normal"
 		maya.shortname		STRING	"tcn"
+
+	[attr top_flip_normal]
+		maya.name			STRING	"top_flip_normal"
+		maya.shortname		STRING	"tfn"
 	
 	[attr bottom_normal]
 		desc				STRING	"Normal of bottom layer"
@@ -56,6 +60,10 @@
 		desc				STRING	"Gamma Correct"
 		maya.name			STRING	"bottom_correct_normal"
 		maya.shortname		STRING	"bcn"
+
+	[attr bottom_flip_normal]
+		maya.name			STRING	"bottom_flip_normal"
+		maya.shortname		STRING	"bfn"
 
 [node LambertNode]
 	maya.name				STRING	"la_LambertBSDF"

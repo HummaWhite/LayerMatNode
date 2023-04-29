@@ -15,8 +15,10 @@ enum LayeredNodeParams
 	p_albedo,
 	p_top_normal,
 	p_top_correct_normal,
+	p_top_flip_normal,
 	p_bottom_normal,
 	p_bottom_correct_normal,
+	p_bottom_flip_normal,
 };
 
 BSDF* GetNodeBSDF(const AtNode* node)
@@ -39,8 +41,10 @@ node_parameters
 	AiParameterRGB("albedo", .8f, .8f, .8f);
 	AiParameterVec("top_normal", 0.f, 0.f, 0.f);
 	AiParameterBool("top_correct_normal", false);
+	AiParameterBool("top_flip_normal", false);
 	AiParameterVec("bottom_normal", 0.f, 0.f, 0.f);
 	AiParameterBool("bottom_correct_normal", false);
+	AiParameterBool("bottom_flip_normal", false);
 }
 
 node_initialize
@@ -98,6 +102,12 @@ shader_evaluate
 			state.nBottom = Pow(state.nBottom, 1.f / 2.2f);
 		state.nBottom = state.nBottom * 2.f - 1.f;
 	}
+
+	if (AiShaderEvalParamBool(p_top_flip_normal))
+		state.nTop = -state.nTop;
+
+	if (AiShaderEvalParamBool(p_bottom_flip_normal))
+		state.nBottom = -state.nBottom;
 
 	if (sg->Rt & AI_RAY_SHADOW)
 		return;
