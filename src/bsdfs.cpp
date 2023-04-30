@@ -161,7 +161,7 @@ AtRGB DielectricBSDF::F(Vec3f wo, Vec3f wi, bool adjoint) const
 	}
 }
 
-float DielectricBSDF::PDF(Vec3f wo, Vec3f wi, bool adjoint) const
+float DielectricBSDF::PDF(Vec3f wo, Vec3f wi, bool adjoint, BSDFFlag flag) const
 {
 	if (ApproxDelta())
 		return 0;
@@ -172,8 +172,9 @@ float DielectricBSDF::PDF(Vec3f wo, Vec3f wi, bool adjoint) const
 		if (Dot(wo, wh) < 0)
 			return 0;
 
-		float fr = FresnelDielectric(AbsDot(wh, wi), ior);
-		return GTR2(wh.z, alpha) / (4.f * AbsDot(wh, wo)) * fr;
+		float fr = flag.refl ? FresnelDielectric(AbsDot(wh, wi), ior) : 0;
+		float tr = flag.tran ? 1.f - fr : 0;
+		return GTR2(wh.z, alpha) / (4.f * AbsDot(wh, wo)) * fr / (fr + tr);
 	}
 	else
 	{
@@ -182,17 +183,21 @@ float DielectricBSDF::PDF(Vec3f wo, Vec3f wi, bool adjoint) const
 		if (SameHemisphere(wh, wo, wi))
 			return 0;
 
-		float fr = FresnelDielectric(Dot(wh, wo), eta);
+		float fr = flag.refl ? FresnelDielectric(Dot(wh, wo), eta) : 0;
+		float tr = flag.tran ? 1.f - fr : 0;
 		float dHdWi = AbsDot(wh, wi) / Sqr(Dot(wh, wo) + eta * Dot(wh, wi));
-		return GTR2(wh.z, alpha) * dHdWi * (1.f - fr);
+		return GTR2(wh.z, alpha) * dHdWi * tr / (fr + tr);
 	}
 }
 
-BSDFSample DielectricBSDF::Sample(Vec3f wo, bool adjoint, RandomEngine& rng) const
+BSDFSample DielectricBSDF::Sample(Vec3f wo, bool adjoint, BSDFFlag flag, RandomEngine& rng) const
 {
 	if (ApproxDelta())
 	{
-		float fr = FresnelDielectric(wo.z, ior);
+		float refl = flag.refl ? FresnelDielectric(wo.z, ior) : 0;
+		float tran = flag.tran ? 1.f - refl : 0;
+
+		float fr = refl / (refl + tran);
 
 		if (Sample1D(rng) < fr)
 		{
@@ -216,7 +221,10 @@ BSDFSample DielectricBSDF::Sample(Vec3f wo, bool adjoint, RandomEngine& rng) con
 		Vec3f wh = GTR2Sample(wo, Sample2D(rng), alpha);
 		if (wh.z < 0)
 			wh = -wh;
-		float fr = FresnelDielectric(Dot(wh, wo), ior);
+
+		float refl = flag.refl ? FresnelDielectric(Dot(wh, wo), ior) : 0;
+		float tran = flag.tran ? 1.f - refl : 0;
+		float fr = refl / (refl + tran);
 
 		if (Sample1D(rng) < fr)
 		{
@@ -315,15 +323,8 @@ BSDFSample MetalBSDF::Sample(Vec3f wo, RandomEngine& rng) const
 
 AtRGB LayeredBSDF::F(Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint) const
 {
-	return AtRGB(0.f);
-	if (!s.top && !s.bottom)
-		return AtRGB(0.f);
-	else if (!s.top)
-		return ::F(s.bottom, wo, wi, s, rng, adjoint);
-	else if (!s.bottom)
-		return ::F(s.top, wo, wi, s, rng, adjoint);
-
-	if (twoSided && wo.z < 0) {
+	if (twoSided && wo.z < 0)
+	{
 		wo = -wo;
 		wi = -wi;
 	}
@@ -332,26 +333,28 @@ AtRGB LayeredBSDF::F(Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, 
 	BSDF* oth = entTop ? s.bottom : s.top;
 	BSDF* ext = SameHemisphere(wo, wi) ? ent : oth;
 
+	Vec3f entNorm = entTop ? s.nTop : s.nBottom;
+	Vec3f othNorm = entTop ? s.nBottom : s.nTop;
+	Vec3f extNorm = (ent == ext) ? entNorm : othNorm;
+
 	float zEnt = entTop ? 0 : thickness;
 	float zExt = (ext == ent) ? zEnt : thickness - zEnt;
 
 	AtRGB f(0.f);
 
 	if (SameHemisphere(wo, wi))
-		f += ::F(ent, wo, wi, s, rng, adjoint) * float(nSamples);
+		f += ::F(ent, entNorm, wo, wi, s, rng, adjoint) * float(nSamples);
 
 	for (int i = 0; i < nSamples; i++)
 	{
-		auto wos = ::Sample(ent, wo, s, rng, adjoint);
+		auto wos = ::Sample(ent, entNorm, wo, s, rng, adjoint, BSDFFlagTransmission);
 
-		if (wos.IsInvalid() || IsSmall(wos.f) || wos.pdf < 1e-8f || wos.wi.z == 0 ||
-			!IsTransmitRay(wos.type))
+		if (wos.IsInvalid() || IsSmall(wos.f) || wos.pdf < 1e-8f || wos.wi.z == 0)
 			continue;
 		
-		auto wis = ::Sample(ext, wi, s, rng, !adjoint);
+		auto wis = ::Sample(ext, extNorm, wi, s, rng, !adjoint, BSDFFlagTransmission);
 
-		if (wis.IsInvalid() || IsSmall(wis.f) || wis.pdf < 1e-8f || wis.wi.z == 0 ||
-			!IsTransmitRay(wis.type))
+		if (wis.IsInvalid() || IsSmall(wis.f) || wis.pdf < 1e-8f || wis.wi.z == 0)
 			continue;
 
 		AtRGB throughput = wos.f / wos.pdf * (::IsDeltaRay(wos.type) ? 1.f : Abs(wos.wi.z));
@@ -360,7 +363,7 @@ AtRGB LayeredBSDF::F(Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, 
 
 		for (int depth = 1; depth <= maxDepth; depth++)
 		{
-			if (depth > 3)
+			if (depth > 4 && Luminance(throughput) < .25f)
 			{
 				float rr = AiMax(0.f, 1.f - Luminance(throughput));
 				if (Sample1D(rng) < rr)
@@ -390,7 +393,7 @@ AtRGB LayeredBSDF::F(Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, 
 						weight = PowerHeuristic(wis.pdf, HGPhasePDF(-w, -wis.wi, g));
 					
 					f += wis.f / wis.pdf * Transmittance(zNext, zExt, wis.wi) * albedo *
-						HGPhaseFunction(Dot(w, wis.wi), g) * weight * throughput;
+						HGPhaseFunction(Dot(-w, -wis.wi), g) * weight * throughput;
 
 					auto phaseSample = HGPhaseSample(-w, g, Sample2D(rng));
 
@@ -402,13 +405,13 @@ AtRGB LayeredBSDF::F(Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, 
 					z = zNext;
 
 					if (((z > zExt && w.z > 0) || (z < zExt && w.z < 0)) && !::IsDelta(ext)) {
-						AtRGB fExt = ::F(ext, -w, wi, s, rng, adjoint);
+						AtRGB fExt = ::F(ext, extNorm, -w, wi, s, rng, adjoint);
 
 						if (!IsSmall(fExt))
 						{
-							float pExt = ::PDF(ext, -w, wi, s, rng, adjoint);
+							float pExt = ::PDF(ext, extNorm, -w, wi, s, rng, adjoint, BSDFFlagTransmission);
 							float weight = PowerHeuristic(phaseSample.pdf, pExt);
-							f += fExt / pExt * Transmittance(z, zExt, phaseSample.wi) * weight * throughput;
+							f += fExt * Transmittance(zNext, zExt, phaseSample.wi) * weight * throughput;
 						}
 					}
 					continue;
@@ -418,7 +421,7 @@ AtRGB LayeredBSDF::F(Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, 
 
 			if (z == zExt)
 			{
-				auto es = ::Sample(ext, -w, s, rng, adjoint);
+				auto es = ::Sample(ext, extNorm, -w, s, rng, adjoint, BSDFFlagReflection);
 				if (es.IsInvalid() || IsSmall(es.f) || es.pdf < 1e-8f || es.wi.z == 0)
 					break;
 				throughput *= es.f / es.pdf * (::IsDeltaRay(es.type) ? 1.f : Abs(es.wi.z));
@@ -430,26 +433,27 @@ AtRGB LayeredBSDF::F(Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, 
 				{
 					float weight = 1.f;
 					if (!::IsDelta(ext))
-						weight = PowerHeuristic(wis.pdf, ::PDF(oth, -w, -wis.wi, s, rng, adjoint));
+						weight = PowerHeuristic(wis.pdf, ::PDF(oth, othNorm, -w, -wis.wi, s, rng, adjoint));
 
-					f += ::F(oth, -w, -wis.wi, s, rng, adjoint) * Abs(wis.wi.z) *
+					f += ::F(oth, othNorm, -w, -wis.wi, s, rng, adjoint) * Abs(wis.wi.z) *
 						Transmittance(thickness, wis.wi) * wis.f / wis.pdf * throughput * weight;
 				}
 
-				auto os = ::Sample(oth, -w, s, rng, adjoint);
+				auto os = ::Sample(oth, othNorm, -w, s, rng, adjoint, BSDFFlagReflection);
 				if (os.IsInvalid() || IsSmall(os.f) || os.pdf < 1e-8f || os.wi.z == 0)
 					break;
 				
 				throughput *= os.f / os.pdf * (::IsDeltaRay(os.type) ? 1.f : Abs(os.wi.z));
+				w = os.wi;
 
 				if (!::IsDelta(ext))
 				{
-					AtRGB fExt = ::F(ext, -w, wi, s, rng, adjoint);
+					AtRGB fExt = ::F(ext, extNorm, -w, wi, s, rng, adjoint);
 					if (!IsSmall(fExt)) {
 						float weight = 1.f;
 						if (!::IsDelta(oth))
 						{
-							float pExt = ::PDF(ext, -w, wi, s, rng, adjoint);
+							float pExt = ::PDF(ext, extNorm, -w, wi, s, rng, adjoint, BSDFFlagTransmission);
 							weight = PowerHeuristic(os.pdf, pExt);
 						}
 						f += fExt * Transmittance(thickness, os.wi) * weight * throughput;
@@ -463,20 +467,18 @@ AtRGB LayeredBSDF::F(Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, 
 
 float LayeredBSDF::PDF(Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint) const
 {
-	return 0.f;
-	if (!s.top && !s.bottom)
-		return 0;
-	else if (!s.top)
-		return ::PDF(s.bottom, wo, wi, s, rng, adjoint);
-	else if (!s.bottom)
-		return ::PDF(s.top, wo, wi, s, rng, adjoint);
-
+	if (twoSided && wo.z < 0)
+	{
+		wo = -wo;
+		wi = -wi;
+	}
 	bool entTop = twoSided || wo.z > 0;
+
 	float pdfSum = 0.f;
 
 	if (SameHemisphere(wo, wi))
-		pdfSum += (entTop ? ::PDF(s.top, wo, wi, s, rng, adjoint) :
-			::PDF(s.bottom, wo, wi, s, rng, adjoint)) * nSamples;
+		pdfSum += (entTop ? ::PDF(s.top, s.nTop, wo, wi, s, rng, adjoint, BSDFFlagReflection) :
+			::PDF(s.bottom, s.nBottom, wo, wi, s, rng, adjoint, BSDFFlagReflection)) * nSamples;
 
 	for (int i = 0; i < nSamples; i++)
 	{
@@ -485,27 +487,30 @@ float LayeredBSDF::PDF(Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng
 			BSDF* tBSDF = entTop ? s.top : s.bottom;
 			BSDF* rBSDF = entTop ? s.bottom : s.top;
 
-			auto wos = ::Sample(tBSDF, wo, s, rng, adjoint);
-			auto wis = ::Sample(tBSDF, wo, s, rng, !adjoint);
+			Vec3f tNorm = entTop ? s.nTop : s.nBottom;
+			Vec3f rNorm = entTop ? s.nBottom : s.nTop;
 
-			if (!wos.IsInvalid() && !IsSmall(wos.f) && wos.pdf > 1e-8f && IsTransmitRay(wos.type) &&
-				!wis.IsInvalid() && !IsSmall(wis.f) && wis.pdf > 1e-8f && IsTransmitRay(wis.type))
+			auto wos = ::Sample(tBSDF, tNorm, wo, s, rng, adjoint, BSDFFlagTransmission);
+			auto wis = ::Sample(tBSDF, tNorm, wo, s, rng, !adjoint, BSDFFlagTransmission);
+
+			if (!wos.IsInvalid() && !IsSmall(wos.f) && wos.pdf > 1e-8f &&
+				!wis.IsInvalid() && !IsSmall(wis.f) && wis.pdf > 1e-8f)
 			{
 				if (::IsDelta(tBSDF))
-					pdfSum += ::PDF(rBSDF, -wos.wi, wis.wi, s, rng, adjoint);
+					pdfSum += ::PDF(rBSDF, rNorm, -wos.wi, wis.wi, s, rng, adjoint);
 				else
 				{
-					auto rs = ::Sample(rBSDF, -wos.wi, s, rng, adjoint);
+					auto rs = ::Sample(rBSDF, rNorm, -wos.wi, s, rng, adjoint);
 					if (!rs.IsInvalid() && !IsSmall(rs.f) && rs.pdf > 1e-8f)
 					{
 						if (::IsDelta(rBSDF)) {
-							pdfSum += ::PDF(tBSDF, -rs.wi, wi, s, rng, adjoint);
+							pdfSum += ::PDF(tBSDF, tNorm, -rs.wi, wi, s, rng, adjoint);
 						}
 						else {
-							float rPdf = ::PDF(rBSDF, -wos.wi, -wis.wi, s, rng, adjoint);
+							float rPdf = ::PDF(rBSDF, rNorm, -wos.wi, -wis.wi, s, rng, adjoint);
 							pdfSum += rPdf * PowerHeuristic(wis.pdf, rPdf);
 
-							float tPdf = ::PDF(tBSDF, -rs.wi, wi, s, rng, adjoint);
+							float tPdf = ::PDF(tBSDF, tNorm, -rs.wi, wi, s, rng, adjoint);
 							pdfSum += tPdf * PowerHeuristic(rs.pdf, tPdf);
 						}
 					}
@@ -517,26 +522,29 @@ float LayeredBSDF::PDF(Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng
 			BSDF* oBSDF = entTop ? s.top : s.bottom;
 			BSDF* iBSDF = entTop ? s.bottom : s.top;
 
-			auto wos = ::Sample(oBSDF, wo, s, rng, adjoint);
+			Vec3f oNorm = entTop ? s.nTop : s.nBottom;
+			Vec3f iNorm = entTop ? s.nBottom : s.nTop;
+
+			auto wos = ::Sample(oBSDF, oNorm, wo, s, rng, adjoint);
 
 			if (wos.IsInvalid() || IsSmall(wos.f) || wos.pdf < 1e-8f || wos.wi.z == 0 ||
 				!IsTransmitRay(wos.type))
 				continue;
 
-			auto wis = ::Sample(iBSDF, wi, s, rng, adjoint);
+			auto wis = ::Sample(iBSDF, iNorm, wi, s, rng, adjoint);
 
 			if (wis.IsInvalid() || IsSmall(wis.f) || wis.pdf < 1e-8f || wis.wi.z == 0 ||
 				!IsTransmitRay(wis.type))
 				continue;
 
 			if (::IsDelta(oBSDF))
-				pdfSum += ::PDF(iBSDF, -wos.wi, wi, s, rng, adjoint);
+				pdfSum += ::PDF(iBSDF, iNorm, -wos.wi, wi, s, rng, adjoint);
 			else if (::IsDelta(iBSDF))
-				pdfSum += ::PDF(oBSDF, wo, -wis.wi, s, rng, adjoint);
+				pdfSum += ::PDF(oBSDF, oNorm, wo, -wis.wi, s, rng, adjoint);
 			else
 			{
-				pdfSum += ::PDF(iBSDF, -wos.wi, wi, s, rng, adjoint) * .5f;
-				pdfSum += ::PDF(oBSDF, wo, -wis.wi, s, rng, adjoint) * .5f;
+				pdfSum += ::PDF(iBSDF, iNorm, -wos.wi, wi, s, rng, adjoint) * .5f;
+				pdfSum += ::PDF(oBSDF, oNorm, wo, -wis.wi, s, rng, adjoint) * .5f;
 			}
 		}
 	}
@@ -545,13 +553,6 @@ float LayeredBSDF::PDF(Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng
 
 BSDFSample LayeredBSDF::Sample(Vec3f wo, const BSDFState& s, RandomEngine& rng, bool adjoint) const
 {
-	if (!s.top && !s.bottom)
-		return BSDFInvalidSample;
-	else if (!s.top)
-		return ::Sample(s.bottom, wo, s, rng, adjoint);
-	else if (!s.bottom)
-		return ::Sample(s.top, wo, s, rng, adjoint);
-
 	bool entTop = wo.z > 0;
 	BSDF* ent = entTop ? s.top : s.bottom;
 	BSDF* oth = entTop ? s.bottom : s.top;
@@ -663,7 +664,7 @@ AtRGB F(const BSDF* bsdf, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& 
 	return AtRGB(0.f);
 }
 
-float PDF(const BSDF* bsdf, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint)
+float PDF(const BSDF* bsdf, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint, BSDFFlag flag)
 {
 	if (std::get_if<FakeBSDF>(bsdf)) {
 		return std::get_if<FakeBSDF>(bsdf)->PDF(wo, wi);
@@ -672,7 +673,7 @@ float PDF(const BSDF* bsdf, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine
 		return std::get_if<LambertBSDF>(bsdf)->PDF(wo, wi);
 	}
 	else if (std::get_if<DielectricBSDF>(bsdf)) {
-		return std::get_if<DielectricBSDF>(bsdf)->PDF(wo, wi, adjoint);
+		return std::get_if<DielectricBSDF>(bsdf)->PDF(wo, wi, adjoint, flag);
 	}
 	else if (std::get_if<MetalBSDF>(bsdf)) {
 		return std::get_if<MetalBSDF>(bsdf)->PDF(wo, wi);
@@ -683,7 +684,7 @@ float PDF(const BSDF* bsdf, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine
 	return 0.f;
 }
 
-BSDFSample Sample(const BSDF* bsdf, Vec3f wo, const BSDFState& s, RandomEngine& rng, bool adjoint)
+BSDFSample Sample(const BSDF* bsdf, Vec3f wo, const BSDFState& s, RandomEngine& rng, bool adjoint, BSDFFlag flag)
 {
 	if (std::get_if<FakeBSDF>(bsdf)) {
 		return std::get_if<FakeBSDF>(bsdf)->Sample(wo);
@@ -692,7 +693,7 @@ BSDFSample Sample(const BSDF* bsdf, Vec3f wo, const BSDFState& s, RandomEngine& 
 		return std::get_if<LambertBSDF>(bsdf)->Sample(wo, rng);
 	}
 	else if (std::get_if<DielectricBSDF>(bsdf)) {
-		return std::get_if<DielectricBSDF>(bsdf)->Sample(wo, adjoint, rng);
+		return std::get_if<DielectricBSDF>(bsdf)->Sample(wo, adjoint, flag, rng);
 	}
 	else if (std::get_if<MetalBSDF>(bsdf)) {
 		return std::get_if<MetalBSDF>(bsdf)->Sample(wo, rng);
@@ -705,22 +706,31 @@ BSDFSample Sample(const BSDF* bsdf, Vec3f wo, const BSDFState& s, RandomEngine& 
 
 AtRGB F(const BSDF* bsdf, Vec3f n, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint)
 {
+	if (Abs(n.z - 1.f) < 1e-5f && Abs(Length(n) - 1.f) < 1e-5f)
+		return F(bsdf, wo, wi, s, rng, adjoint);
+
 	Vec3f woLocal = ToLocal(n, wo);
 	Vec3f wiLocal = ToLocal(n, wi);
 	return F(bsdf, woLocal, wiLocal, s, rng, adjoint);
 }
 
-float PDF(const BSDF* bsdf, Vec3f n, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint)
+float PDF(const BSDF* bsdf, Vec3f n, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint, BSDFFlag flag)
 {
+	if (Abs(n.z - 1.f) < 1e-5f && Abs(Length(n) - 1.f) < 1e-5f)
+		return PDF(bsdf, wo, wi, s, rng, adjoint, flag);
+
 	Vec3f woLocal = ToLocal(n, wo);
 	Vec3f wiLocal = ToLocal(n, wi);
-	return PDF(bsdf, woLocal, wiLocal, s, rng, adjoint);
+	return PDF(bsdf, woLocal, wiLocal, s, rng, adjoint, flag);
 }
 
-BSDFSample Sample(const BSDF* bsdf, Vec3f n, Vec3f wo, const BSDFState& s, RandomEngine& rng, bool adjoint)
+BSDFSample Sample(const BSDF* bsdf, Vec3f n, Vec3f wo, const BSDFState& s, RandomEngine& rng, bool adjoint, BSDFFlag flag)
 {
+	if (Abs(n.z - 1.f) < 1e-5f && Abs(Length(n) - 1.f) < 1e-5f)
+		return Sample(bsdf, wo, s, rng, adjoint, flag);
+
 	Vec3f woLocal = ToLocal(n, wo);
-	BSDFSample sample = Sample(bsdf, woLocal, s, rng, adjoint);
+	BSDFSample sample = Sample(bsdf, woLocal, s, rng, adjoint, flag);
 	if (!sample.IsInvalid())
 		sample.wi = ToWorld(n, sample.wi);
 	return sample;

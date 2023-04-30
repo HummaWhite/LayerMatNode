@@ -24,7 +24,7 @@ bsdf_sample
 	auto& state = fs->state;
 
 	RandomEngine rng(FloatBitsToInt(rnd.x) ^ state.seed);
-	BSDFSample sample = fs->bsdf.Sample(state.wo, false, rng);
+	BSDFSample sample = fs->bsdf.Sample(state.wo, false, BSDFFlagAll, rng);
 
 	if (sample.IsInvalid())
 		return AI_BSDF_LOBE_MASK_NONE;
@@ -44,7 +44,7 @@ bsdf_eval
 	Vec3f wiLocal = ToLocal(state.nf, wi);
 
 	AtRGB f = fs->bsdf.F(state.wo, wiLocal, false);
-	float pdf = fs->bsdf.PDF(state.wo, wiLocal, false);
+	float pdf = fs->bsdf.PDF(state.wo, wiLocal, false, BSDFFlagAll);
 	float cosWiOverPdf = fs->bsdf.IsDelta() ? 1.f : Abs(wiLocal.z) / pdf;
 
 	if (pdf < 1e-6f || isnan(pdf) || IsInvalid(f) || Luminance(f) > 1e8f)

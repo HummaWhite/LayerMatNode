@@ -45,6 +45,19 @@ struct BSDFSample
 	float eta;
 };
 
+struct BSDFFlag
+{
+	BSDFFlag() : refl(true), tran(true) {}
+	BSDFFlag(bool refl, bool tran) : refl(refl), tran(tran) {}
+
+	bool refl;
+	bool tran;
+};
+
+const BSDFFlag BSDFFlagReflection(true, false);
+const BSDFFlag BSDFFlagTransmission(false, true);
+const BSDFFlag BSDFFlagAll;
+
 const BSDFSample BSDFInvalidSample(Vec3f(), AtRGB(), 0, AI_RAY_UNDEFINED);
 
 struct FakeBSDF;
@@ -86,15 +99,15 @@ struct BSDFState
 	Vec3f nf;
 	// front-facing smooth normal without normal map
 	Vec3f ns;
-	// top normal
-	Vec3f nTop;
-	// bottom normal
-	Vec3f nBottom;
 	Vec3f wo;
 	int seed;
 
 	BSDF* top = nullptr;
 	BSDF* bottom = nullptr;
+	Vec3f nTop;
+	Vec3f nBottom;
+	AtRGB topAlbedo;
+	AtRGB bottomAlbedo;
 };
 
 struct FakeBSDF
@@ -120,8 +133,8 @@ struct LambertBSDF
 struct DielectricBSDF
 {
 	AtRGB F(Vec3f wo, Vec3f wi, bool adjoint) const;
-	float PDF(Vec3f wo, Vec3f wi, bool adjoint) const;
-	BSDFSample Sample(Vec3f wo, bool adjoint, RandomEngine& rng) const;
+	float PDF(Vec3f wo, Vec3f wi, bool adjoint, BSDFFlag flag) const;
+	BSDFSample Sample(Vec3f wo, bool adjoint, BSDFFlag flag, RandomEngine& rng) const;
 
 	bool IsDelta() const { return ApproxDelta(); }
 	bool HasTransmit() const { return true; }
@@ -173,12 +186,12 @@ struct WithState
 };
 
 AtRGB F(const BSDF* bsdf, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint);
-float PDF(const BSDF* bsdf, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint);
-BSDFSample Sample(const BSDF* bsdf, Vec3f wo, const BSDFState& s, RandomEngine& rng, bool adjoint);
+float PDF(const BSDF* bsdf, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint, BSDFFlag flag = {});
+BSDFSample Sample(const BSDF* bsdf, Vec3f wo, const BSDFState& s, RandomEngine& rng, bool adjoint, BSDFFlag flag = {});
 
 AtRGB F(const BSDF* bsdf, Vec3f n, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint);
-float PDF(const BSDF* bsdf, Vec3f n, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint);
-BSDFSample Sample(const BSDF* bsdf, Vec3f n, Vec3f wo, const BSDFState& s, RandomEngine& rng, bool adjoint);
+float PDF(const BSDF* bsdf, Vec3f n, Vec3f wo, Vec3f wi, const BSDFState& s, RandomEngine& rng, bool adjoint, BSDFFlag flag = {});
+BSDFSample Sample(const BSDF* bsdf, Vec3f n, Vec3f wo, const BSDFState& s, RandomEngine& rng, bool adjoint, BSDFFlag flag = {});
 
 bool IsDelta(const BSDF* bsdf);
 bool HasTransmit(const BSDF* bsdf);
