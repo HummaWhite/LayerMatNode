@@ -7,6 +7,11 @@
 
 ![](./example.jpg)
 
+### Contributors
+
+- [Chang Liu](https://github.com/HummaWhite)
+- [Gehan Zheng](https://github.com/GrahamZen)
+
 ### Setup
 
 #### Set environment variables
